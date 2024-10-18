@@ -2,37 +2,37 @@
 Analyzed at depth 22, Engine estimated elo 3000
 
 
-white:rybka
-white book moves:0
+white:me
+white book moves:3
 white legendary moves:0
 white brilliant moves:0
-white great moves:1
-white best moves:52
-white excellent moves:11
-white good moves:15
-white inaccuracies:1
-white mistakes:3
-white blunders:0
+white great moves:5
+white best moves:9
+white excellent moves:4
+white good moves:2
+white inaccuracies:0
+white mistakes:1
+white blunders:1
 
-white middle game accuracy:94.55%
-white end game accuracy:98.26%
-white overall accuracy:96.86%
-white estimated elo: 2905
+white middle game accuracy:95.75%
+white end game accuracy:0.00%
+white overall accuracy:95.75%
+white estimated elo: 2872
 
 
-black:goob
-black book moves:0
+black:noob
+black book moves:2
 black legendary moves:0
-black brilliant moves:1
-black great moves:2
-black best moves:54
-black excellent moves:16
-black good moves:8
+black brilliant moves:0
+black great moves:0
+black best moves:8
+black excellent moves:6
+black good moves:2
 black inaccuracies:1
 black mistakes:0
-black blunders:1
+black blunders:5
 
-black middle game accuracy:97.07%
-black end game accuracy:100.00%
-black overall accuracy:99.61%
-black estimated elo: 2988
+black middle game accuracy:86.15%
+black end game accuracy:0.00%
+black overall accuracy:86.15%
+black estimated elo: 2584

@@ -177,7 +177,7 @@ def count_book_moves(moves):
 
 def accuracy_full_game(positions, analysis_depth, reversed_move_list):
     print(f"ANALYZING EACH MOVE TO DEPTH {analysis_depth} ...")
-    _engine = "engines/stockfish_v16.exe"
+    _engine = "engines/stockfish17"
     print(f'using engine={_engine}\n')
 
     # open the two engines each for each color

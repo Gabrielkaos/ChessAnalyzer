@@ -15,22 +15,22 @@ class Board:
 
         # PVTable
         self.pv_table = PVTable()
-        self.pv_array = np.zeros(max_game_moves, dtype=np.int)
+        self.pv_array = np.zeros(max_game_moves, dtype=int)
 
         # board things
         self.side = BOTH
-        self.pieces120 = np.zeros(BOARD_NUM_SQ, dtype=np.int)
+        self.pieces120 = np.zeros(BOARD_NUM_SQ, dtype=int)
         self.castle_rights = 0
         self.en_passant = NO_SQ
         self.fifty_move = 0
 
         # extra board things
         self.game_phase = 0
-        self.num_pieces = np.zeros(13, dtype=np.int)
-        self.piece_list = np.zeros((13, 10), dtype=np.int)
-        self.material = np.zeros(2, dtype=np.int)
-        self.kingSq = np.zeros(2, dtype=np.int)
-        self.big_piece = np.zeros(2, dtype=np.int)
+        self.num_pieces = np.zeros(13, dtype=int)
+        self.piece_list = np.zeros((13, 10), dtype=int)
+        self.material = np.zeros(2, dtype=int)
+        self.kingSq = np.zeros(2, dtype=int)
+        self.big_piece = np.zeros(2, dtype=int)
 
         # board history things
         self.ply = 0
@@ -45,8 +45,8 @@ class Board:
         init_hash_keys(self)
 
         # search things
-        self.search_killers = np.zeros((2, MAX_DEPTH), dtype=np.int)
-        self.search_history = np.zeros((13, BOARD_NUM_SQ), dtype=np.int)
+        self.search_killers = np.zeros((2, MAX_DEPTH), dtype=int)
+        self.search_history = np.zeros((13, BOARD_NUM_SQ), dtype=int)
 
         # parsing start fen
         self.parse_fen(START_FEN)

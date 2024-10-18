@@ -197,8 +197,7 @@ def main():
                     game.not_mirrored ^= True
                 elif event.key == pygame.K_l:
                     try:
-                        site_pgn = game.parse_pgn(
-                            "C:/Users/Gabriel Montes/PycharmProjects/ChessAnalyzer/ChessAnalyzer/pgns/saved_pgn.pgn")
+                        site_pgn = game.parse_pgn("pgns/saved_pgn.pgn")
                         copy_of_reversed_list = game.removed_move.copy()
                     except AttributeError:
                         continue
