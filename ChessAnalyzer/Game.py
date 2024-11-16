@@ -17,7 +17,7 @@ piece_dictss = {1: "wp", 4: "wR", 2: "wN",
                 9: "bB", 11: "bQ", 12: "bK"
                 }
 DIM = 8
-HEIGHT = WIDTH = DIM * 70
+HEIGHT = WIDTH = DIM * 100
 SQUARE_SIZE = HEIGHT // DIM
 pieces_arr = ["wp", "wN", "wB", "wR", "wQ", "wK", "bp", "bN", "bB", "bR", "bQ", "bK"]
 mirror_col = [7, 6, 5, 4, 3, 2, 1, 0]

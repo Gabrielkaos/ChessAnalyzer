@@ -1,38 +1,38 @@
 
-Analyzed at depth 22, Engine estimated elo 3000
+Analyzed at depth 18, Engine estimated elo 3000
 
 
-white:me
+white:
 white book moves:3
 white legendary moves:0
 white brilliant moves:0
-white great moves:5
-white best moves:9
-white excellent moves:4
-white good moves:2
-white inaccuracies:0
-white mistakes:1
-white blunders:1
+white great moves:0
+white best moves:12
+white excellent moves:1
+white good moves:12
+white inaccuracies:3
+white mistakes:4
+white blunders:4
 
-white middle game accuracy:95.75%
-white end game accuracy:0.00%
-white overall accuracy:95.75%
-white estimated elo: 2872
+white middle game accuracy:79.27%
+white end game accuracy:96.33%
+white overall accuracy:83.84%
+white estimated elo: 2515
 
 
-black:noob
+black:
 black book moves:2
 black legendary moves:0
 black brilliant moves:0
-black great moves:0
-black best moves:8
-black excellent moves:6
-black good moves:2
-black inaccuracies:1
-black mistakes:0
-black blunders:5
+black great moves:2
+black best moves:13
+black excellent moves:5
+black good moves:10
+black inaccuracies:3
+black mistakes:1
+black blunders:3
 
-black middle game accuracy:86.15%
-black end game accuracy:0.00%
-black overall accuracy:86.15%
-black estimated elo: 2584
+black middle game accuracy:87.47%
+black end game accuracy:97.49%
+black overall accuracy:90.22%
+black estimated elo: 2706

@@ -38,8 +38,6 @@ class SearchInfo:
         self.depth = 0
         self.stopped = 0
         self.nodes = 0
-        # self.fhf = 0
-        # self.fh = 0
 
         self.post = False
 

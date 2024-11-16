@@ -1,0 +1,9 @@
+/.idea
+/.venv
+/ChessAnalyzer/__pycache__
+*.pyc
+/ChessAnalyzer/.idea
+/ChessAnalyzer/pgns/load_req.txt
+/ChessAnalyzer/pgns/saved_pgn.pgn
+/ChessAnalyzer/review/review.txt
+/ChessAnalyzer/engine

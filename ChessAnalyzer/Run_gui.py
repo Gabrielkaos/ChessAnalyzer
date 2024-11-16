@@ -76,9 +76,6 @@ def find_the_move_and_cap(already_used, moves_from_pgn, move):
     return None, None
 
 
-def elo_reduction(depth):
-    return 57 * depth + 1971
-
 def still_losing(evaluation, side):
     if side == BLACK:
         if evaluation >= 500: return True
