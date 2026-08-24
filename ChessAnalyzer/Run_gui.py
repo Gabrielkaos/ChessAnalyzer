@@ -13,7 +13,7 @@ from Pv_table import move_really_exists
 from Move_format import undo_move, CAPTURED, TOSQ
 from Game import Game, HEIGHT, WIDTH, SQUARE_SIZE, DIM, mirrored_sq
 import pyperclip
-from Analyzer import accuracy_full_game, count_book_moves
+from Analyzer import accuracy_full_game, count_book_moves, LiveAnalyzer
 from Move_format import make_move
 
 pygame.init()
@@ -22,7 +22,7 @@ pygame.init()
 
 pygame.display.set_caption("Gab Chess Gui")
 pygame.display.set_icon(pygame.image.load("logo/gabchessgui.png"))
-fen_font = pygame.font.Font('freesansbold.ttf', 13)
+fen_font = pygame.font.Font('freesansbold.ttf', 15)
 move_SFX = pygame.mixer.Sound("sounds/moves_sound.mp3")
 castle_SFX = pygame.mixer.Sound("sounds/castle_sound.mp3")
 capture_SFX = pygame.mixer.Sound("sounds/captured_sound.mp3")
@@ -34,9 +34,9 @@ def opposite_color(side):
 
 
 def move_cap(acc, move, best_move):
-    if acc > 243.1: return "legendary"  # considered a legendary if you gain 20% win rate
-    if acc > 124.9: return "brilliant"  # considered a brilliance if you gain 5% win rate
-    if acc > 112.1: return "great"  # considered great if you gain 28 centipawns
+    if acc > 243.1: return "legendary"  # gained 20% win rate
+    if acc > 124.9: return "brilliant"  # gained 5% win rate
+    if acc > 112.1: return "great"  # gained 2% win rate
 
     # conditioned best move
     # if not legendary and not brilliant and not great
@@ -48,12 +48,13 @@ def move_cap(acc, move, best_move):
             # if sacrifice and is_suicide: return "brilliant" #if captured a less value piece and suicide move
             # if is_suicide: return "great" #if opponent attacker is greater but great move return great
             return "best"
-    if acc > 98.6: return "excellent"  # considered excellent if you only lost 3 centipawns
-    if acc > 86.4: return "good"  # considered good if you only lost 35 centipawns
-    if acc > 79.5: return "inaccuracy"  # if you lost 55 centipawns
-    if acc > 67.5: return "mistake"  # if you lost 95 centipawns
-    if acc <= 67.5: return "blunder"  # none of the above
-    return ""
+            
+    # Chess.com Expected Points Model thresholds (mapped to acc formula):
+    if acc > 91.44: return "excellent"  # 0 to 2% win rate loss (0.02 expected points)
+    if acc > 79.82: return "good"       # 2 to 5% win rate loss (0.05 expected points)
+    if acc > 63.63: return "inaccuracy" # 5 to 10% win rate loss (0.10 expected points)
+    if acc > 39.99: return "mistake"    # 10 to 20% win rate loss (0.20 expected points)
+    return "blunder"                    # > 20% win rate loss
 
 
 def find_things_from_fen(fen,fen_list):
@@ -168,6 +169,9 @@ def main():
 
     screen = pygame.display.set_mode((WIDTH + 50 + WIDTH // 2, HEIGHT))
     game = Game(screen, game_start_SFX, fen_font)
+    
+    live_analyzer = LiveAnalyzer()
+    game.we_should_display_caps = True
 
     # histories
     move_cap_hist = []
@@ -180,16 +184,21 @@ def main():
     stored_move_cap_move = []
     loaded_fens_analyzed = load_fen_reqs()
 
+    clock = pygame.time.Clock()
+
     while True:
-        screen.fill((120, 120, 120))
+        clock.tick(60)
+        screen.fill((30, 32, 35)) # Modern dark gray background
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                live_analyzer.quit()
                 pygame.quit()
                 exit(0)
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_r:
                     game.reset_game()
+                    game.we_should_display_caps = True
                 elif event.key == pygame.K_f:
                     game.not_mirrored ^= True
                 elif event.key == pygame.K_l:
@@ -209,6 +218,7 @@ def main():
                         game.best_move_recommended = None
                         game.eval_for_best = None
                 elif event.key == pygame.K_s:
+                    live_analyzer.quit()
                     pygame.quit()
 
                     white_name = input("Enter white name:")
@@ -691,8 +701,7 @@ def main():
                         game.sq_tuple = (row, col)
                         game.player_clicks.append(sq)
 
-                    if len(game.player_clicks) == 2 and \
-                            not game.we_should_display_caps:
+                    if len(game.player_clicks) == 2:
                         if not game.not_mirrored:
                             move_str_from = sq_to_str[sq64_to_sq120[mirror64[game.player_clicks[0]]]]
                             move_str_to = sq_to_str[sq64_to_sq120[mirror64[game.player_clicks[1]]]]
@@ -724,6 +733,7 @@ def main():
                         try:
                             if move_really_exists(game.board_state, move):
                                 game.make_the_move(move)
+                                game.removed_move.clear()
                                 game.reset_clicks()
                             else:
                                 game.player_clicks = [game.sq_selected]
@@ -744,6 +754,21 @@ def main():
             # important things
             game.move_made = False
             game.update_valid_moves()
+
+        if not game.is_game_over():
+            live_analyzer.update_fen(game.board_state.board_to_fen())
+            analysis = live_analyzer.get_analysis()
+            
+            game.best_move_recommended = analysis['best_move']
+            if analysis['mate_found']:
+                game.eval_for_best = f"M{abs(analysis['evaluation'])}" if analysis['evaluation'] > 0 else f"M{-abs(analysis['evaluation'])}"
+            else:
+                game.eval_for_best = str(analysis['evaluation'])
+                
+            game.engine_details = analysis
+        else:
+            game.eval_for_best = "GameOver"
+            game.engine_details = None
 
         game.draw_all()
 

@@ -331,13 +331,14 @@ def generate_all_captures(board, move_list):
 def generate_all_legal(board):
     move_list = MoveList()
     generate_all_moves(board,move_list)
-    lenss = move_list.count
-    for i in range(lenss):
-        if not make_move(board,move_list.moves[i].move):
-            move_list.moves.remove(move_list.moves[i])
-            move_list.count -=1
-            continue
+    
+    legal_count = 0
+    for i in range(move_list.count):
+        if make_move(board, move_list.moves[i].move):
+            move_list.moves[legal_count].move = move_list.moves[i].move
+            move_list.moves[legal_count].score = move_list.moves[i].score
+            legal_count += 1
+            undo_move(board)
 
-        undo_move(board)
-
+    move_list.count = legal_count
     return move_list

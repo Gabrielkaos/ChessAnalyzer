@@ -132,52 +132,49 @@ def command(p, commands):
 
 
 def count_book_moves(moves):
-    with open('books/book.txt', 'r') as f:
-        book_lines = f.readlines()
+    import chess
+    import chess.polyglot
+    import os
 
     not_reversed_moves = []
     for i in range(len(moves) - 1, -1, -1):
-        not_reversed_moves.append(moves[i])
+        # We need to clean the string in case it has trailing newlines from previous logic.
+        not_reversed_moves.append(str(moves[i]).strip())
 
-    longest_book_lines = []
-    lines_length = []
-    for line in book_lines:
-        real_line = line.split(" ")
-        longest_line = 0
-        book_moves = []
+    board = chess.Board()
+    book_moves_made = []
 
-        if len(real_line) > len(not_reversed_moves): continue
+    book_path = os.path.join(os.path.dirname(__file__), 'books', 'book.bin')
+    try:
+        with chess.polyglot.open_reader(book_path) as reader:
+            for move_str in not_reversed_moves:
+                try:
+                    # Find all book moves for current board
+                    book_entries = list(reader.find_all(board))
+                    book_move_strings = [entry.move.uci() for entry in book_entries]
 
-        for i in range(len(real_line)):
-            try:
-                if str(not_reversed_moves[i]) == str(real_line[i]):
-                    book_moves.append(not_reversed_moves[i])
-                    longest_line += 1
-                else:
-                    longest_book_lines.append(book_moves)
-                    lines_length.append(longest_line)
+                    if move_str in book_move_strings:
+                        book_moves_made.append(move_str)
+                        # Push the move to the board to update the position
+                        board.push(chess.Move.from_uci(move_str))
+                    else:
+                        break # As soon as a move is not in the book, we stop
+                except Exception:
                     break
-            except IndexError:
-                lines_length.append(longest_line)
-                longest_book_lines.append(book_moves)
-                break
+    except Exception as e:
+        print(f"Error reading book: {e}")
 
-    longest_length = 0
-    best_books = 0
-    for i, value in enumerate(longest_book_lines):
-        if len(value) > longest_length:
-            longest_length = len(value)
-            best_books = i
-
-    longest = 0
-    for i in lines_length:
-        if i > longest: longest = i
-    return longest, longest_book_lines[best_books]
+    longest_length = len(book_moves_made)
+    return longest_length, book_moves_made
 
 
 def accuracy_full_game(positions, analysis_depth, reversed_move_list):
     print(f"ANALYZING EACH MOVE TO DEPTH {analysis_depth} ...")
-    _engine = "engines/stockfish17"
+    import os
+    engine_files = [f for f in os.listdir('engines') if os.path.isfile(os.path.join('engines', f))]
+    if not engine_files:
+        raise FileNotFoundError("No engine found in engines/ directory")
+    _engine = f"engines/{engine_files[0]}"
     print(f'using engine={_engine}\n')
 
     # open the two engines each for each color
@@ -313,6 +310,117 @@ def accuracy_full_game(positions, analysis_depth, reversed_move_list):
                                                                                                   b_best_moves], all_accuracy, min(
         get_harmonic_mean(accuracy_lists), 100.0), min(get_harmonic_mean(accuracy_lists_black), 100.0)
 
+
+import threading
+
+class LiveAnalyzer:
+    def __init__(self):
+        import os
+        engine_files = [f for f in os.listdir('engines') if os.path.isfile(os.path.join('engines', f))]
+        if not engine_files:
+            raise FileNotFoundError("No engine found in engines/ directory")
+        self.engine_path = f"engines/{engine_files[0]}"
+        self.engine = Popen([self.engine_path], stdout=PIPE, stdin=PIPE, stderr=STDOUT, bufsize=1, universal_newlines=True)
+        
+        self.current_fen = None
+        self.best_move = None
+        self.evaluation = 0
+        self.mate_found = False
+        
+        self.engine_name = "Unknown Engine"
+        self.depth = 0
+        self.seldepth = 0
+        self.nodes = 0
+        self.pv_moves = ""
+        
+        self.lock = threading.Lock()
+        
+        self._send_command('uci')
+        self._send_command('isready')
+        
+        self.reader_thread = threading.Thread(target=self._read_output, daemon=True)
+        self.reader_thread.start()
+
+    def _send_command(self, cmd):
+        try:
+            self.engine.stdin.write(cmd + '\n')
+            self.engine.stdin.flush()
+        except Exception:
+            pass
+
+    def update_fen(self, fen):
+        with self.lock:
+            if self.current_fen == fen:
+                return
+            self.current_fen = fen
+            
+        self._send_command('stop')
+        self._send_command('ucinewgame')
+        self._send_command(f'position fen {fen}')
+        self._send_command('go depth 20') # Use depth 20 to save CPU while still being accurate enough
+
+    def get_analysis(self):
+        with self.lock:
+            return {
+                'best_move': self.best_move,
+                'evaluation': self.evaluation,
+                'mate_found': self.mate_found,
+                'engine_name': self.engine_name,
+                'depth': self.depth,
+                'seldepth': self.seldepth,
+                'nodes': self.nodes,
+                'pv': self.pv_moves
+            }
+
+    def quit(self):
+        self._send_command('quit')
+
+    def _read_output(self):
+        for line in iter(self.engine.stdout.readline, ''):
+            line = line.strip()
+            if not line:
+                continue
+            
+            if line.startswith('id name'):
+                with self.lock:
+                    self.engine_name = line.replace('id name', '').strip()
+                    
+            elif line.startswith('info'):
+                parts = line.split()
+                with self.lock:
+                    try:
+                        if 'depth' in parts:
+                            self.depth = parts[parts.index('depth') + 1]
+                        if 'seldepth' in parts:
+                            self.seldepth = parts[parts.index('seldepth') + 1]
+                        if 'nodes' in parts:
+                            self.nodes = parts[parts.index('nodes') + 1]
+                            
+                        fen = self.current_fen
+                        if fen and 'score' in parts:
+                            score_idx = parts.index('score')
+                            colors = fen.split(" ")[1]
+                            if parts[score_idx + 1] == 'cp':
+                                score = int(parts[score_idx + 2])
+                                self.evaluation = score if colors == 'w' else -score
+                                self.mate_found = False
+                            elif parts[score_idx + 1] == 'mate':
+                                mate_in = int(parts[score_idx + 2])
+                                self.evaluation = mate_in if colors == 'w' else -mate_in
+                                self.mate_found = True
+                        
+                        if 'pv' in parts:
+                            pv_idx = parts.index('pv')
+                            self.best_move = parts[pv_idx + 1]
+                            self.pv_moves = " ".join(parts[pv_idx + 1:pv_idx + 6])
+                    except ValueError:
+                        pass
+            elif line.startswith('bestmove'):
+                parts = line.split()
+                if len(parts) >= 2:
+                    with self.lock:
+                        if parts[1] != "(none)":
+                            self.best_move = parts[1]
 
 if __name__ == "__main__":
     print(accuracy(win_rate(900), win_rate(0)))

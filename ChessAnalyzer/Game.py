@@ -1,4 +1,5 @@
 import chess.pgn
+import math
 import pygame
 from Board import Board
 import numpy as np
@@ -99,6 +100,8 @@ class Game:
         self.eval_for_best = None
         self.move_cap = None
         self.already_went_endgame = False
+        self.current_drawn_eval = 0.0
+        self.target_eval = 0.0
 
         self.removed_move = []
         self.white_moves = []
@@ -166,9 +169,8 @@ class Game:
             if self.not_mirrored: c = mirror_col[c]
             s = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE))
             s.set_alpha(110)
-            if self.we_should_display_caps:
-                if self.move_cap is not None:
-                    s.fill(self.square_color_based_on_cap[self.move_cap])
+            if self.we_should_display_caps and self.move_cap is not None:
+                s.fill(self.square_color_based_on_cap[self.move_cap])
             else:
                 s.fill(pygame.Color((255, 255, 0)))
             self.win.blit(s, (c * SQUARE_SIZE, r * SQUARE_SIZE))
@@ -230,47 +232,53 @@ class Game:
             pass
 
     def draw_info(self):
-        # fen
-        # text = fen_font.render(self.board_state.board_to_fen(), True, (0, 0, 0))
-        # self.win.blit(text, (WIDTH, 30))
-        offset = 50
+        offset = 60
+        font_color = (220, 220, 220)
+        header_color = (150, 200, 255)
+        
+        # Info Panel Background
+        info_rect = pygame.Rect(WIDTH + 40, 0, (WIDTH // 2) + 10, HEIGHT)
+        pygame.draw.rect(self.win, (40, 42, 45), info_rect)
+        
+        # Helper to draw aligned text
+        def draw_text(title, value, y_pos, t_color=header_color, v_color=font_color):
+            t_surface = self.fen_font.render(f"{title}: ", True, t_color)
+            v_surface = self.fen_font.render(str(value), True, v_color)
+            self.win.blit(t_surface, (WIDTH + offset, y_pos))
+            self.win.blit(v_surface, (WIDTH + offset + t_surface.get_width(), y_pos))
 
-        # phase
+        # Game Phase
         if self.board_state.game_phase < 43:
-            if not self.already_went_endgame:
-                phase = "opening"
-            else:
-                phase = "endgame"
+            phase = "Endgame" if self.already_went_endgame else "Opening"
         elif 43 <= self.board_state.game_phase < 171:
-            if not self.already_went_endgame:
-                phase = "middle game"
-            else:
-                phase = "endgame"
+            phase = "Endgame" if self.already_went_endgame else "Middle Game"
         else:
             if not self.already_went_endgame: self.already_went_endgame = True
-            phase = "endgame"
+            phase = "Endgame"
 
         move_number = str(int(1 + (self.board_state.his_ply - (self.board_state.side == BLACK)) / 2))
-        text = self.fen_font.render(f"Move number: {move_number}", True, (0, 0, 0))
-        self.win.blit(text, (WIDTH + offset, 30))
-        text = self.fen_font.render(f"Fifty Move Rule:{int(self.board_state.fifty_move)}", True, (0, 0, 0))
-        self.win.blit(text, (WIDTH + offset, 60))
-        text = self.fen_font.render(f"Phase:{phase.upper()}", True, (0, 0, 0))
-        self.win.blit(text, (WIDTH + offset, 90))
+        
+        draw_text("Move Number", move_number, 30)
+        draw_text("Phase", phase.upper(), 60)
+        draw_text("50 Move Rule", int(self.board_state.fifty_move), 90)
 
         # if in check
-        in_check, _ = is_attacked(self.board_state.kingSq[self.board_state.side], self.board_state.side ^ 1,
-                                  self.board_state)
-        text = self.fen_font.render(f"Check:{in_check}", True, (0, 0, 0))
-        self.win.blit(text, (WIDTH + offset, 120))
+        in_check, _ = is_attacked(self.board_state.kingSq[self.board_state.side], self.board_state.side ^ 1, self.board_state)
+        if in_check:
+            check_surface = self.fen_font.render("IN CHECK!", True, (255, 100, 100))
+            self.win.blit(check_surface, (WIDTH + offset, 120))
 
         self.draw_captured()
 
         if self.we_should_display_caps:
-            text = self.fen_font.render(f"best={self.best_move_recommended}", True, (0, 0, 0))
-            self.win.blit(text, (WIDTH + offset, 240))
-            text = self.fen_font.render(f"eval={self.eval_for_best}", True, (0, 0, 0))
-            self.win.blit(text, (WIDTH + offset, 270))
+            draw_text("Engine Best", self.best_move_recommended, 240)
+            draw_text("Evaluation", self.eval_for_best, 270)
+            
+            if hasattr(self, 'engine_details') and self.engine_details:
+                draw_text("Engine", self.engine_details.get('engine_name', ''), 300)
+                draw_text("Depth", f"{self.engine_details.get('depth', 0)}/{self.engine_details.get('seldepth', 0)}", 330)
+                draw_text("Nodes", self.engine_details.get('nodes', 0), 360)
+                draw_text("PV", self.engine_details.get('pv', ''), 390)
 
             if self.eval_for_best is not None:
                 if "M" not in self.eval_for_best and "G" not in self.eval_for_best:
@@ -285,24 +293,68 @@ class Game:
                 mate_found = False
                 real_eval = 0
             self.draw_eval_bar(real_eval, mate_found)
+            
+        # Draw Controls Guide
+        controls_y = HEIGHT - 220
+        c_title = self.fen_font.render("--- CONTROLS ---", True, header_color)
+        self.win.blit(c_title, (WIDTH + offset, controls_y))
+        
+        controls = [
+            ("L", "Load saved game (PGN)"),
+            ("S", "Analyze & Save game"),
+            ("Left/Right", "Undo / Redo Move"),
+            ("F", "Flip Board"),
+            ("R", "Reset Game"),
+            ("C", "Copy FEN")
+        ]
+        
+        for i, (key, desc) in enumerate(controls):
+            k_surf = self.fen_font.render(f"[{key}]", True, (200, 200, 100))
+            d_surf = self.fen_font.render(f" - {desc}", True, font_color)
+            self.win.blit(k_surf, (WIDTH + offset, controls_y + 30 + i * 25))
+            self.win.blit(d_surf, (WIDTH + offset + k_surf.get_width(), controls_y + 30 + i * 25))
 
     def draw_eval_bar(self, evaluation, mate_found):
+        if mate_found:
+            target = 10000 if evaluation > 0 else -10000
+        else:
+            target = evaluation
+            
+        self.target_eval = target
+        
+        # Smooth interpolation (lerp)
+        self.current_drawn_eval += (self.target_eval - self.current_drawn_eval) * 0.1
+        
+        # Use sigmoid (win probability) to map eval to a 0-1 percentage
+        try:
+            win_prob = 0.5 + 0.5 * (2 / (1 + math.exp(-0.00368208 * self.current_drawn_eval)) - 1)
+        except OverflowError:
+            win_prob = 1.0 if self.current_drawn_eval > 0 else 0.0
+            
         x1 = WIDTH
         x2 = WIDTH + 40
-        x = evaluation
-        eval_copy = x
+        
+        # Standard: Black on top, White on bottom
+        black_height = int(HEIGHT * (1.0 - win_prob))
+        white_height = HEIGHT - black_height
+        
+        eval_bar_black = pygame.Rect((x1, 0), (x2 - x1, black_height))
+        eval_bar_white = pygame.Rect((x1, black_height), (x2 - x1, white_height))
+        
+        pygame.draw.rect(self.win, (40, 40, 40), eval_bar_black)
+        pygame.draw.rect(self.win, (240, 240, 240), eval_bar_white)
+        
+        # Add modern text indicator
         if mate_found:
-            if eval_copy > 0:
-                evaluation = 20000
-            else:
-                evaluation = -20000
-        evaluation /= 2
-        eval_bar_white = pygame.Rect((x1, 0),
-                                     (x2 - x1, ((HEIGHT // 2) + evaluation) - 0))
-        eval_bar_black = pygame.Rect((x1, (HEIGHT // 2) + evaluation),
-                                     (x2 - x1, HEIGHT - ((HEIGHT // 2) + evaluation)))
-        pygame.draw.rect(self.win, (10, 10, 10), eval_bar_black)
-        pygame.draw.rect(self.win, (210, 210, 210), eval_bar_white)
+            eval_str = f"M{abs(evaluation)}"
+        else:
+            eval_str = f"{abs(evaluation)/100:.1f}"
+            
+        text = self.fen_font.render(eval_str, True, (200, 200, 200) if self.target_eval < 0 else (100, 100, 100))
+        # Place text at the top if black is winning, or bottom if white is winning
+        y_pos = 20 if self.target_eval < 0 else HEIGHT - 20
+        text_rect = text.get_rect(center=(x1 + 20, y_pos))
+        self.win.blit(text, text_rect)
 
     def reset_clicks(self):
         self.sq_selected = None
@@ -348,7 +400,7 @@ class Game:
     def draw_captured(self):
         white_caps = 0
         black_caps = 0
-        offset = 50
+        offset = 60
         for cap in self.captured_pieces:
             if piece_color[cap] == WHITE:
                 self.win.blit(pygame.transform.scale(self.images[piece_dictss[cap]], (20, 20)),

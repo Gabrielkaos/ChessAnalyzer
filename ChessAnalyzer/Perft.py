@@ -2,7 +2,7 @@ from Move_gen import generate_all_moves
 from Move_format import MoveList,make_move,undo_move
 from Board import Board
 
-global LEAF_NODES
+LEAF_NODES = 0
 
 def move_generation_test(gs, depth):
     global LEAF_NODES
