@@ -411,9 +411,10 @@ class LiveAnalyzer:
                         
                         if 'pv' in parts:
                             pv_idx = parts.index('pv')
-                            self.best_move = parts[pv_idx + 1]
-                            self.pv_moves = " ".join(parts[pv_idx + 1:pv_idx + 6])
-                    except ValueError:
+                            if pv_idx + 1 < len(parts):
+                                self.best_move = parts[pv_idx + 1]
+                                self.pv_moves = " ".join(parts[pv_idx + 1:pv_idx + 6])
+                    except (ValueError, IndexError):
                         pass
             elif line.startswith('bestmove'):
                 parts = line.split()
