@@ -454,25 +454,27 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
               </span>
             </div>
 
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
               {[
                 { depth: 14, label: 'D14', desc: 'Fast' },
                 { depth: 16, label: 'D16', desc: 'Balanced' },
                 { depth: 18, label: 'D18', desc: 'Deep' },
                 { depth: 20, label: 'D20', desc: 'Master' },
+                { depth: 22, label: 'D22', desc: 'Elite' },
               ].map((item) => (
                 <button
                   key={item.depth}
                   type="button"
                   onClick={() => setDepth(item.depth)}
-                  className={`py-2 px-1 rounded-lg text-center border transition-all ${
+                  className={`py-2 px-0.5 sm:px-1 rounded-lg text-center border transition-all ${
                     depth === item.depth
                       ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-sm font-bold'
                       : 'bg-[#262421] border-[#363430] text-gray-400 hover:text-gray-200'
                   }`}
+                  title={`${item.desc} (Depth ${item.depth})`}
                 >
                   <div className="text-xs font-black">{item.label}</div>
-                  <div className="text-[10px] opacity-75">{item.desc}</div>
+                  <div className="text-[9px] sm:text-[10px] opacity-75">{item.desc}</div>
                 </button>
               ))}
             </div>
@@ -607,7 +609,7 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
             className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs font-black bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-950/40 transition-all hover:scale-105"
           >
             <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            <span>Apply Selection</span>
+            <span>Apply Selection (D{depth})</span>
           </button>
         </div>
       </div>

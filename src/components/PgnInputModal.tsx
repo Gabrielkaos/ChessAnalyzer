@@ -7,8 +7,11 @@ import { Upload, FileText, Globe, X, Play, Sparkles } from 'lucide-react';
 interface PgnInputModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onStartReview: (pgn: string, depth: number) => void;
+  onStartReview: (pgn: string) => void;
   isAnalyzing: boolean;
+  engineName?: string;
+  engineDepth?: number;
+  onOpenEngineModal?: () => void;
 }
 
 export const PgnInputModal: React.FC<PgnInputModalProps> = ({
@@ -16,9 +19,11 @@ export const PgnInputModal: React.FC<PgnInputModalProps> = ({
   onClose,
   onStartReview,
   isAnalyzing,
+  engineName = 'Stockfish 18 (NNUE)',
+  engineDepth = 18,
+  onOpenEngineModal,
 }) => {
   const [pgnText, setPgnText] = useState<string>(SAMPLE_PGNS.saved.pgn);
-  const [selectedDepth, setSelectedDepth] = useState<number>(20);
   const [activeTab, setActiveTab] = useState<'paste' | 'samples' | 'online'>('paste');
   const [username, setUsername] = useState<string>('');
   const [platform, setPlatform] = useState<'chesscom' | 'lichess'>('chesscom');
@@ -266,37 +271,29 @@ export const PgnInputModal: React.FC<PgnInputModalProps> = ({
             </div>
           )}
 
-          {/* Depth selection */}
-          <div className="pt-3 border-t border-[#363430] flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <span className="text-xs font-bold text-gray-200">Analysis Depth:</span>
-              <p className="text-[11px] text-amber-300 font-semibold">
-                ⚡ Higher depth = More accurate analysis
-              </p>
+          {/* Active Engine & Depth Info */}
+          <div className="pt-3 border-t border-[#363430] flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400">Review Engine:</span>
+              <span className="font-bold text-amber-300">
+                {engineName}
+              </span>
+              <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-950/50 border border-amber-800/50 text-amber-300">
+                DEPTH {engineDepth}
+              </span>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {[
-                { depth: 18, label: 'D18', desc: 'Fast' },
-                { depth: 20, label: 'D20', desc: 'Balanced' },
-                { depth: 22, label: 'D22', desc: 'Deep' },
-                { depth: 26, label: 'D26', desc: 'Master' },
-              ].map((item) => (
-                <button
-                  key={item.depth}
-                  type="button"
-                  onClick={() => setSelectedDepth(item.depth)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-colors ${
-                    selectedDepth === item.depth
-                      ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-sm'
-                      : 'bg-[#1f1e1b] border-[#363430] text-gray-400 hover:text-gray-200'
-                  }`}
-                  title={`${item.desc} (Depth ${item.depth})`}
-                >
-                  <span>{item.label}</span>
-                  <span className="text-[10px] font-normal opacity-75 ml-1">({item.desc})</span>
-                </button>
-              ))}
-            </div>
+            {onOpenEngineModal && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenEngineModal();
+                }}
+                className="text-xs text-emerald-400 hover:text-emerald-300 underline font-semibold transition-colors text-left sm:text-right"
+              >
+                Change Engine or Depth →
+              </button>
+            )}
           </div>
         </div>
 
@@ -312,14 +309,15 @@ export const PgnInputModal: React.FC<PgnInputModalProps> = ({
           <button
             type="button"
             onClick={() => {
-              onStartReview(pgnText, selectedDepth);
+              onStartReview(pgnText);
               onClose();
             }}
             disabled={!pgnText.trim() || isAnalyzing}
             className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-lg shadow-emerald-950/40 transition-all hover:scale-105"
+            title={`Run Game Review with ${engineName} at Depth ${engineDepth}`}
           >
             <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" />
-            <span>Start Game Review</span>
+            <span>Start Game Review (D{engineDepth})</span>
           </button>
         </div>
       </div>
