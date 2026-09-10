@@ -98,8 +98,8 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
     setSelectedEnginePreset(preset);
     if (preset === 'goob') {
       setActiveType('native');
-      const goob = nativeEngines.find((e) => e.name.includes('GOOB'));
-      const goobPath = goob?.path || selectedNativePath || 'ChessAnalyzer/engines/GOOB-2.2-BETA-native';
+      const optimal = nativeEngines.find((e) => e.isDefault) || nativeEngines.find((e) => e.name.includes('GOOB')) || nativeEngines[0];
+      const goobPath = optimal?.path || selectedNativePath || 'default';
       setSelectedNativePath(goobPath);
       setCustomPathInput(goobPath);
     } else if (preset === 'stockfish') {
@@ -151,11 +151,11 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
     let finalConfig: EngineConfig;
 
     if (selectedEnginePreset === 'goob') {
-      const goob = nativeEngines.find((e) => e.name.includes('GOOB'));
+      const chosen = nativeEngines.find((e) => e.path === selectedNativePath) || nativeEngines.find((e) => e.isDefault) || nativeEngines.find((e) => e.name.includes('GOOB'));
       finalConfig = {
         type: 'native',
-        nativeName: 'GOOB 2.2-BETA',
-        nativePath: goob?.path || customPathInput.trim() || selectedNativePath || 'ChessAnalyzer/engines/GOOB-2.2-BETA-native',
+        nativeName: chosen?.name || 'GOOB 2.2-BETA',
+        nativePath: chosen?.path || customPathInput.trim() || selectedNativePath || 'default',
         customFileName: '',
         depth,
       };
@@ -319,7 +319,7 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
                       <div className="font-bold text-sm text-white flex items-center gap-1.5">
                         <span>GOOB 2.2-BETA</span>
                         <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded border border-amber-500/30">
-                          Native
+                          {nativeEngines.find((e) => e.path === selectedNativePath)?.features?.split(' ')[0] || 'Native'}
                         </span>
                       </div>
                       <div className="text-[11px] text-gray-400">by Gabriel Montes</div>
@@ -327,17 +327,63 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
                   </div>
 
                   <p className="text-xs text-gray-300/90 leading-relaxed mb-3">
-                    Custom native UCI binary in C with aggressive tactical heuristics. Best when running locally via <code>npm run dev</code> on your PC.
+                    Fast native UCI binary in C with aggressive search heuristics. Auto-probes CPU to select optimal ISA tier (v3 PEXT / v2 / baseline SSE2).
                   </p>
+
+                  {/* Multi-tier Build Selector if GOOB is selected */}
+                  {selectedEnginePreset === 'goob' && nativeEngines.filter((e) => e.name.includes('GOOB')).length > 1 && (
+                    <div className="mt-2 pt-2 border-t border-amber-500/20 space-y-1.5">
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-amber-300/80">
+                        Select CPU Architecture Build:
+                      </div>
+                      <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                        {nativeEngines
+                          .filter((e) => e.name.includes('GOOB'))
+                          .map((eng) => {
+                            const isSelected = selectedNativePath === eng.path || (!selectedNativePath && eng.isDefault);
+                            return (
+                              <div
+                                key={eng.path}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedNativePath(eng.path);
+                                  setCustomPathInput(eng.path);
+                                }}
+                                className={`px-2 py-1.5 rounded-lg border text-[11px] cursor-pointer flex items-center justify-between transition-colors ${
+                                  isSelected
+                                    ? 'bg-amber-500/25 border-amber-400 text-white font-semibold'
+                                    : 'bg-[#181715] border-[#363430] text-gray-300 hover:border-amber-500/40'
+                                }`}
+                              >
+                                <div className="truncate mr-2">
+                                  <div className="truncate flex items-center gap-1">
+                                    <span>{eng.name}</span>
+                                    {eng.isDefault && (
+                                      <span className="text-[8px] bg-emerald-500/20 text-emerald-300 px-1 py-0.2 rounded border border-emerald-500/30">
+                                        Optimal
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[9px] text-gray-400 truncate">{eng.features}</div>
+                                </div>
+                                <span className="text-[10px] text-emerald-400 shrink-0 font-mono">
+                                  {eng.isCompatible ? '✓ Ready' : '—'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <div className="pt-2 border-t border-[#363430]/60 flex items-center justify-between text-[11px]">
+                <div className="pt-2 mt-2 border-t border-[#363430]/60 flex items-center justify-between text-[11px]">
                   <span className="text-amber-400 font-semibold flex items-center gap-1">
                     <Award className="w-3 h-3" />
-                    Local PC / Desktop
+                    Local PC / Linux
                   </span>
                   <span className="text-gray-400 font-mono text-[10px]">
-                    {nativeEngines.some((e) => e.name.includes('GOOB')) ? '✓ Native Ready' : 'Bundled Binary'}
+                    {nativeEngines.some((e) => e.isCompatible) ? '✓ Host Compatible' : 'Bundled Binary'}
                   </span>
                 </div>
               </div>

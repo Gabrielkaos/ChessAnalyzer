@@ -9,6 +9,10 @@ export interface DiscoveredNativeEngine {
   author: string;
   path: string;
   isDefault: boolean;
+  tier?: number;
+  features?: string;
+  description?: string;
+  isCompatible?: boolean;
 }
 
 export interface EngineConfig {
@@ -60,7 +64,7 @@ class EngineManager {
         if (!saved) {
           this.config.type = 'native';
           this.config.nativeName = 'GOOB 2.2-BETA';
-          this.config.nativePath = 'ChessAnalyzer/engines/GOOB-2.2-BETA-native';
+          this.config.nativePath = 'default';
         }
         this.detectNativeEngines();
       }
@@ -70,8 +74,8 @@ class EngineManager {
   public selectGoob(depth?: number) {
     this.setConfig({
       type: 'native',
-      nativeName: 'GOOB 2.2-BETA',
-      nativePath: this.config.nativePath || 'ChessAnalyzer/engines/GOOB-2.2-BETA-native',
+      nativeName: this.config.nativeName || 'GOOB 2.2-BETA',
+      nativePath: this.config.nativePath || 'default',
       depth: depth ?? this.config.depth ?? 20,
     });
   }
@@ -112,12 +116,16 @@ class EngineManager {
       if (!res.ok) return [];
       const data = await res.json();
       if (data.available && data.engines && data.engines.length > 0) {
-        const goob = data.engines.find((e: DiscoveredNativeEngine) => e.isDefault || e.name.includes('GOOB')) || data.engines[0];
-        if (!this.config.nativePath || this.config.nativeName?.includes('GOOB')) {
+        const goob = data.optimalEngine || data.engines.find((e: DiscoveredNativeEngine) => e.isDefault || e.name.includes('GOOB')) || data.engines[0];
+        if (!this.config.nativePath || this.config.nativePath === 'default' || this.config.nativeName?.includes('GOOB')) {
           this.config.nativePath = goob.path;
           this.config.nativeName = goob.name;
         }
         return data.engines;
+      } else if (!data.available && this.config.type === 'native') {
+        // Fallback to in-browser Stockfish if native binaries cannot run on this platform
+        this.config.type = 'builtin';
+        this.config.nativeName = 'Stockfish 10';
       }
     } catch {}
     return [];

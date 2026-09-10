@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, spawnSync, ChildProcess } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 
@@ -11,11 +11,91 @@ interface EngineInfo {
   author: string;
   path: string;
   isDefault: boolean;
+  tier: number;
+  features: string;
+  description: string;
+  isCompatible: boolean;
 }
 
 let activeProcess: ChildProcess | null = null;
 let activeEnginePath: string | null = null;
 let evalQueue: Promise<unknown> = Promise.resolve();
+const compatibilityCache = new Map<string, boolean>();
+
+function getEngineMetadata(fileName: string): {
+  name: string;
+  tier: number;
+  features: string;
+  description: string;
+} {
+  const lower = fileName.toLowerCase();
+  if (lower.includes('v3') || lower.includes('x86-64-v3')) {
+    return {
+      name: 'GOOB 2.2-BETA (v3 - AVX2/BMI2)',
+      tier: 3,
+      features: 'AVX2 + BMI2 (PEXT Bitboards)',
+      description: 'Fast hardware bitboard attacks. Optimal for modern CPUs (Haswell / Zen 3+).',
+    };
+  }
+  if (lower.includes('native')) {
+    return {
+      name: 'GOOB 2.2-BETA (Native Host)',
+      tier: 4,
+      features: 'Host CPU ISA & Cache Tuned',
+      description: 'Compiled with -march=native tuned for this host machine microarchitecture.',
+    };
+  }
+  if (lower.includes('v2') || lower.includes('x86-64-v2')) {
+    return {
+      name: 'GOOB 2.2-BETA (v2 - SSE4.2/POPCNT)',
+      tier: 2,
+      features: 'SSE4.2 + Hardware POPCNT',
+      description: 'Hardware popcount via __SSE4_2__ for tbprobe and bitboards (2008+).',
+    };
+  }
+  if (lower.includes('x86-64') || lower.includes('goob')) {
+    return {
+      name: 'GOOB 2.2-BETA (x86-64 Baseline)',
+      tier: 1,
+      features: 'Baseline SSE2 (Universal Compatibility)',
+      description: 'Widest compatibility, magic slider fallback. Runs on every 64-bit x86 computer.',
+    };
+  }
+  return {
+    name: fileName.replace(/\.exe$/i, ''),
+    tier: 1,
+    features: process.platform === 'win32' ? 'Windows Executable' : 'Custom UCI',
+    description: 'Custom UCI chess engine.',
+  };
+}
+
+function checkEngineCompatibility(resolvedPath: string): boolean {
+  if (compatibilityCache.has(resolvedPath)) {
+    return compatibilityCache.get(resolvedPath)!;
+  }
+
+  // Windows check
+  if (process.platform === 'win32') {
+    const isExe = resolvedPath.toLowerCase().endsWith('.exe');
+    compatibilityCache.set(resolvedPath, isExe);
+    return isExe;
+  }
+
+  // Linux/POSIX test run uci handshake to ensure host CPU doesn't trigger SIGILL
+  try {
+    const res = spawnSync(resolvedPath, [], {
+      input: 'uci\nquit\n',
+      encoding: 'utf8',
+      timeout: 1000,
+    });
+    const ok = res.status === 0 && Boolean(res.stdout?.includes('uciok'));
+    compatibilityCache.set(resolvedPath, ok);
+    return ok;
+  } catch {
+    compatibilityCache.set(resolvedPath, false);
+    return false;
+  }
+}
 
 function scanForEngines(): EngineInfo[] {
   const discovered: EngineInfo[] = [];
@@ -32,7 +112,6 @@ function scanForEngines(): EngineInfo[] {
         if (!entry.isFile()) continue;
         const fullPath = path.join(dir, entry.name);
 
-        // Check if file is executable or binary
         try {
           const fd = fs.openSync(fullPath, 'r');
           const buffer = Buffer.alloc(4);
@@ -43,7 +122,7 @@ function scanForEngines(): EngineInfo[] {
           const isWindowsExe = buffer[0] === 0x4d && buffer[1] === 0x5a;
           const isMachO = buffer[0] === 0xcf && buffer[1] === 0xfa && buffer[2] === 0xed && buffer[3] === 0xfe;
 
-          if (!isElf && !isWindowsExe && !isMachO && !entry.name.includes('native')) {
+          if (!isElf && !isWindowsExe && !isMachO && !entry.name.includes('GOOB') && !entry.name.includes('native')) {
             continue;
           }
 
@@ -53,12 +132,19 @@ function scanForEngines(): EngineInfo[] {
             } catch {}
           }
 
+          const meta = getEngineMetadata(entry.name);
+          const isCompatible = checkEngineCompatibility(fullPath);
+
           discovered.push({
             id: entry.name,
-            name: entry.name.includes('GOOB') ? 'GOOB 2.2-BETA' : entry.name,
+            name: meta.name,
             author: entry.name.includes('GOOB') ? 'Gabriel Montes' : 'Local UCI Author',
             path: fullPath,
-            isDefault: entry.name.includes('GOOB'),
+            isDefault: false,
+            tier: meta.tier,
+            features: meta.features,
+            description: meta.description,
+            isCompatible,
           });
         } catch {}
       }
@@ -73,22 +159,43 @@ function scanForEngines(): EngineInfo[] {
     }
   }
 
-  return Array.from(unique.values());
-}
+  const list = Array.from(unique.values());
 
-function resolveEngineExecutable(enginePath: string): string {
-  if (!enginePath || enginePath === 'goob' || enginePath === 'default') {
-    const goob = scanForEngines().find((e) => e.name.includes('GOOB')) || scanForEngines()[0];
-    if (goob) return goob.path;
+  // Sort: compatible first, then highest tier first
+  list.sort((a, b) => {
+    if (a.isCompatible !== b.isCompatible) return a.isCompatible ? -1 : 1;
+    return b.tier - a.tier;
+  });
+
+  // Mark the best compatible engine as default
+  const defaultEng = list.find((e) => e.isCompatible) || list[0];
+  if (defaultEng) {
+    defaultEng.isDefault = true;
   }
 
-  let target = path.isAbsolute(enginePath) ? enginePath : path.resolve(process.cwd(), enginePath);
+  return list;
+}
+
+function resolveEngineExecutable(enginePath?: string): string {
+  const req = enginePath?.trim() || 'default';
+  const engines = scanForEngines();
+  const compatibleEngines = engines.filter((e) => e.isCompatible);
+
+  // If default or 'goob' requested, pick the highest compatible engine
+  if (req === 'goob' || req === 'default') {
+    const def = compatibleEngines.find((e) => e.isDefault) || compatibleEngines[0] || engines[0];
+    if (def) return def.path;
+  }
+
+  let target = path.isAbsolute(req) ? req : path.resolve(process.cwd(), req);
   if (!fs.existsSync(target)) {
+    const base = path.basename(req);
     const candidates = [
-      path.resolve(process.cwd(), 'ChessAnalyzer', 'engines', path.basename(enginePath)),
-      path.resolve(process.cwd(), 'engines', path.basename(enginePath)),
-      path.resolve(process.cwd(), 'ChessAnalyzer', 'engines', 'GOOB-2.2-BETA-native'),
-      path.resolve('/tmp', path.basename(enginePath)),
+      path.resolve(process.cwd(), 'ChessAnalyzer', 'engines', base),
+      path.resolve(process.cwd(), 'engines', base),
+      path.resolve(process.cwd(), 'ChessAnalyzer', 'engines', 'GOOB-2.2-BETA-x86-64-v3'),
+      path.resolve(process.cwd(), 'ChessAnalyzer', 'engines', 'GOOB-2.2-BETA-x86-64'),
+      path.resolve('/tmp', base),
     ];
     for (const cand of candidates) {
       if (fs.existsSync(cand)) {
@@ -113,6 +220,16 @@ function resolveEngineExecutable(enginePath: string): string {
           target = tmpDest;
         } catch {}
       }
+    }
+  }
+
+  // Safety: If the target is NOT compatible with this host CPU (e.g. user requested v3 on a non-AVX2 CPU)
+  // dynamically fall back to the highest compatible engine to prevent crashing with SIGILL!
+  if (fs.existsSync(target) && !checkEngineCompatibility(target) && compatibleEngines.length > 0) {
+    const fallback = compatibleEngines.find((e) => e.isDefault) || compatibleEngines[0];
+    if (fallback) {
+      console.warn(`[Engine] Requested engine ${target} is not compatible with host CPU; falling back to ${fallback.path}`);
+      return fallback.path;
     }
   }
 
@@ -211,10 +328,21 @@ function getOrSpawnEngine(enginePath: string): ChildProcess {
 export async function GET() {
   try {
     const engines = scanForEngines();
+    const isWindows = process.platform === 'win32';
+    const compatibleEngines = engines.filter((e) => e.isCompatible);
+    const defaultEng = compatibleEngines.find((e) => e.isDefault) || compatibleEngines[0] || engines[0];
+
     return NextResponse.json({
-      available: true,
+      available: compatibleEngines.length > 0,
+      platform: process.platform,
+      arch: process.arch,
       engines,
-      defaultEnginePath: engines.find((e) => e.isDefault)?.path || engines[0]?.path || '',
+      defaultEnginePath: defaultEng?.path || '',
+      optimalEngine: defaultEng || null,
+      message:
+        isWindows && compatibleEngines.length === 0
+          ? 'Running on Windows: Native Linux ELF binaries cannot run natively. WebAssembly Stockfish 10 is automatically active for in-browser local compute. You can also place a Windows UCI .exe in ChessAnalyzer/engines/.'
+          : undefined,
     });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Failed to scan engines';

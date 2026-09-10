@@ -168,13 +168,95 @@ def count_book_moves(moves):
     return longest_length, book_moves_made
 
 
+def get_best_engine():
+    import os
+    import sys
+    import subprocess
+
+    dirs_to_check = ['engines', 'ChessAnalyzer/engines', '../engines']
+    engine_dir = None
+    for d in dirs_to_check:
+        if os.path.isdir(d):
+            engine_dir = d
+            break
+
+    if not engine_dir:
+        raise FileNotFoundError("No 'engines' directory found")
+
+    # Windows detection:
+    if sys.platform == 'win32':
+        exe_files = [
+            f for f in os.listdir(engine_dir)
+            if f.lower().endswith('.exe') and os.path.isfile(os.path.join(engine_dir, f))
+        ]
+        if exe_files:
+            goob_exe = [f for f in exe_files if 'goob' in f.lower()]
+            chosen = goob_exe[0] if goob_exe else exe_files[0]
+            chosen_path = os.path.join(engine_dir, chosen)
+            print(f"[Engine] Windows detected: using executable {chosen_path}")
+            return chosen_path
+        raise FileNotFoundError(
+            f"No Windows (.exe) engine found in '{engine_dir}'. "
+            f"The four GOOB-2.2 builds provided are Linux ELF binaries. "
+            f"Please place a Windows UCI engine (e.g. GOOB.exe) into '{engine_dir}' or run via WSL."
+        )
+
+    # Linux / POSIX detection:
+    preferred_order = [
+        ('GOOB-2.2-BETA-native', 'Native Host ISA (Zen 3 / Haswell tuned)'),
+        ('GOOB-2.2-BETA-x86-64-v3', 'x86-64-v3 (AVX2 + BMI2 / PEXT bitboards)'),
+        ('GOOB-2.2-BETA-x86-64-v2', 'x86-64-v2 (SSE4.2 + Hardware POPCNT)'),
+        ('GOOB-2.2-BETA-x86-64', 'x86-64 Baseline (SSE2 - Universal compatibility)'),
+    ]
+
+    available = [f for f in os.listdir(engine_dir) if os.path.isfile(os.path.join(engine_dir, f))]
+    if not available:
+        raise FileNotFoundError(f"No engine found in {engine_dir}/ directory")
+
+    # Ensure executable bit
+    for f in available:
+        fp = os.path.join(engine_dir, f)
+        try:
+            os.chmod(fp, 0o755)
+        except Exception:
+            pass
+
+    # Probe in descending tier order to find fastest compatible binary for this CPU without SIGILL
+    for cand_name, desc in preferred_order:
+        if cand_name in available:
+            cand_path = os.path.join(engine_dir, cand_name)
+            try:
+                res = subprocess.run(
+                    [cand_path],
+                    input='uci\nquit\n',
+                    capture_output=True,
+                    text=True,
+                    timeout=1
+                )
+                if res.returncode == 0 and 'uciok' in res.stdout:
+                    print(f"[Engine] Selected optimal build: {cand_name} ({desc})")
+                    return cand_path
+            except Exception as err:
+                print(f"[Engine] {cand_name} not compatible with this CPU ({err}), testing fallback...")
+                continue
+
+    # Fallback to any file in directory that passes handshake
+    for f in available:
+        cand_path = os.path.join(engine_dir, f)
+        try:
+            res = subprocess.run([cand_path], input='uci\nquit\n', capture_output=True, text=True, timeout=1)
+            if res.returncode == 0 and 'uciok' in res.stdout:
+                print(f"[Engine] Fallback engine selected: {cand_path}")
+                return cand_path
+        except Exception:
+            continue
+
+    return os.path.join(engine_dir, available[0])
+
+
 def accuracy_full_game(positions, analysis_depth, reversed_move_list):
     print(f"ANALYZING EACH MOVE TO DEPTH {analysis_depth} ...")
-    import os
-    engine_files = [f for f in os.listdir('engines') if os.path.isfile(os.path.join('engines', f))]
-    if not engine_files:
-        raise FileNotFoundError("No engine found in engines/ directory")
-    _engine = f"engines/{engine_files[0]}"
+    _engine = get_best_engine()
     print(f'using engine={_engine}\n')
 
     # open the two engines each for each color
@@ -315,11 +397,7 @@ import threading
 
 class LiveAnalyzer:
     def __init__(self):
-        import os
-        engine_files = [f for f in os.listdir('engines') if os.path.isfile(os.path.join('engines', f))]
-        if not engine_files:
-            raise FileNotFoundError("No engine found in engines/ directory")
-        self.engine_path = f"engines/{engine_files[0]}"
+        self.engine_path = get_best_engine()
         self.engine = Popen([self.engine_path], stdout=PIPE, stdin=PIPE, stderr=STDOUT, bufsize=1, universal_newlines=True)
         
         self.current_fen = None
