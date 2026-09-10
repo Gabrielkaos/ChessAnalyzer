@@ -7,7 +7,9 @@ export function calculateWinRate(centipawns: number): number {
 }
 
 export function calculateAccuracy(winBefore: number, winAfter: number): number {
-  return 103.1668 * Math.exp(-0.04354 * (winBefore - winAfter)) - 3.1669;
+  const winRateLoss = Math.max(0, winBefore - winAfter);
+  const acc = 103.1668 * Math.exp(-0.04354 * winRateLoss) - 3.1669;
+  return Math.max(0, Math.min(100, Math.round(acc * 10) / 10));
 }
 
 export function getHarmonicMean(num: number[]): number {
@@ -50,49 +52,259 @@ export function determineGamePhase(fen: string): GamePhase {
 
 export const gamePhaseCap = determineGamePhase;
 
-export interface ClassifyInput {
-  accuracy: number;
-  uci: string;
-  bestMoveUci: string;
-  winRateLoss: number;
-  evalBefore: number;
-  evalAfter: number;
-  isBook: boolean;
-  isSacrifice?: boolean;
-  previousMoveClassification?: MoveClassification;
-  wasOpponentBlunderOrMistake?: boolean;
-}
-
 export const PIECE_VALUES: Record<string, number> = {
   p: 100,
   n: 300,
   b: 300,
   r: 500,
   q: 900,
-  k: 5000,
+  k: 10000,
 };
 
+export interface PieceAttacker {
+  type: PieceSymbol;
+  square: Square;
+  value: number;
+}
+
 /**
- * Exact move_cap logic from Run_gui.py lines 36-58:
- * if acc > 243.1: legendary (gained 20% win rate)
- * if acc > 124.9: brilliant (gained 5% win rate)
- * if acc > 112.1: great (gained 2% win rate)
- * if move == best_move: best
- * if acc > 91.44: excellent (0 to 2% win rate loss)
- * if acc > 79.82: good (2 to 5% win rate loss)
- * if acc > 63.63: inaccuracy (5 to 10% win rate loss)
- * if acc > 39.99: mistake (10 to 20% win rate loss)
- * else: blunder (> 20% win rate loss)
+ * Returns all pieces of attackingColor that attack the given square.
+ */
+export function getAttackers(
+  chess: Chess,
+  square: Square,
+  attackingColor: Color
+): PieceAttacker[] {
+  const board = chess.board();
+  const file = square.charCodeAt(0) - 97; // 'a' -> 0, 'h' -> 7
+  const rank = 8 - parseInt(square[1], 10); // '8' -> 0, '1' -> 7
+  const attackers: PieceAttacker[] = [];
+
+  // 1. Pawn attacks
+  const pawnRank = attackingColor === 'w' ? rank + 1 : rank - 1;
+  for (const pawnFile of [file - 1, file + 1]) {
+    if (pawnRank >= 0 && pawnRank < 8 && pawnFile >= 0 && pawnFile < 8) {
+      const p = board[pawnRank][pawnFile];
+      if (p && p.color === attackingColor && p.type === 'p') {
+        attackers.push({ type: 'p', square: p.square, value: 100 });
+      }
+    }
+  }
+
+  // 2. Knight attacks
+  const knightDeltas: [number, number][] = [
+    [-2, -1], [-2, 1], [-1, -2], [-1, 2],
+    [1, -2], [1, 2], [2, -1], [2, 1],
+  ];
+  for (const [dr, df] of knightDeltas) {
+    const nr = rank + dr;
+    const nf = file + df;
+    if (nr >= 0 && nr < 8 && nf >= 0 && nf < 8) {
+      const p = board[nr][nf];
+      if (p && p.color === attackingColor && p.type === 'n') {
+        attackers.push({ type: 'n', square: p.square, value: 300 });
+      }
+    }
+  }
+
+  // 3. King attacks
+  for (let dr = -1; dr <= 1; dr++) {
+    for (let df = -1; df <= 1; df++) {
+      if (dr === 0 && df === 0) continue;
+      const kr = rank + dr;
+      const kf = file + df;
+      if (kr >= 0 && kr < 8 && kf >= 0 && kf < 8) {
+        const p = board[kr][kf];
+        if (p && p.color === attackingColor && p.type === 'k') {
+          attackers.push({ type: 'k', square: p.square, value: 10000 });
+        }
+      }
+    }
+  }
+
+  // 4. Raycasting diagonals (bishops & queens)
+  const diagDirs: [number, number][] = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+  for (const [dr, df] of diagDirs) {
+    let r = rank + dr;
+    let f = file + df;
+    while (r >= 0 && r < 8 && f >= 0 && f < 8) {
+      const p = board[r][f];
+      if (p) {
+        if (p.color === attackingColor && (p.type === 'b' || p.type === 'q')) {
+          attackers.push({ type: p.type, square: p.square, value: PIECE_VALUES[p.type] || 0 });
+        }
+        break;
+      }
+      r += dr;
+      f += df;
+    }
+  }
+
+  // 5. Raycasting orthogonals (rooks & queens)
+  const orthDirs: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  for (const [dr, df] of orthDirs) {
+    let r = rank + dr;
+    let f = file + df;
+    while (r >= 0 && r < 8 && f >= 0 && f < 8) {
+      const p = board[r][f];
+      if (p) {
+        if (p.color === attackingColor && (p.type === 'r' || p.type === 'q')) {
+          attackers.push({ type: p.type, square: p.square, value: PIECE_VALUES[p.type] || 0 });
+        }
+        break;
+      }
+      r += dr;
+      f += df;
+    }
+  }
+
+  return attackers;
+}
+
+/**
+ * Checks whether a friendly piece is en prise (can be captured for material gain).
+ */
+export function isPieceEnPrise(
+  chess: Chess,
+  square: Square,
+  pieceType: PieceSymbol,
+  pieceColor: Color
+): boolean {
+  const oppColor: Color = pieceColor === 'w' ? 'b' : 'w';
+  const attackers = getAttackers(chess, square, oppColor);
+  if (attackers.length === 0) return false;
+
+  const defenders = getAttackers(chess, square, pieceColor);
+  const pieceVal = PIECE_VALUES[pieceType] || 0;
+
+  // Attacked by a strictly lower-value piece (e.g. pawn attacks knight/bishop/rook/queen)
+  const lowestAttackerVal = Math.min(...attackers.map((a) => a.value));
+  if (pieceVal - lowestAttackerVal >= 150) {
+    return true;
+  }
+
+  // Completely undefended
+  if (defenders.length === 0) {
+    return true;
+  }
+
+  // Overloaded: more attackers than defenders
+  if (attackers.length > defenders.length) {
+    return true;
+  }
+
+  return false;
+}
+
+export interface SacrificeDetection {
+  isSacrifice: boolean;
+  sacrificedPiece?: PieceSymbol;
+  square?: Square;
+  netMaterialRisked?: number;
+}
+
+/**
+ * Detects whether a move is a genuine piece sacrifice (minor piece, rook, queen, or exchange).
+ * Excludes trades, equal recaptures, and pawn moves.
+ */
+export function detectPieceSacrifice(
+  chessBefore: Chess,
+  chessAfter: Chess,
+  move: { from: Square; to: Square; piece: PieceSymbol; captured?: PieceSymbol; color: Color },
+  lastMove?: { from: Square; to: Square; piece: PieceSymbol; captured?: PieceSymbol }
+): SacrificeDetection {
+  const movingColor = move.color;
+
+  // Exclude direct equal/winning recaptures on the same square
+  if (lastMove && lastMove.to === move.to && move.captured) {
+    const movedVal = PIECE_VALUES[move.piece] || 0;
+    const capturedVal = PIECE_VALUES[move.captured] || 0;
+    if (capturedVal >= movedVal) {
+      return { isSacrifice: false };
+    }
+  }
+
+  // 1. Active sacrifice: The moved piece lands on an attacked square risking material
+  if (move.piece !== 'p' && move.piece !== 'k') {
+    const pieceVal = PIECE_VALUES[move.piece] || 0;
+    const capturedVal = move.captured ? (PIECE_VALUES[move.captured] || 0) : 0;
+    const netMaterialRisked = pieceVal - capturedVal;
+
+    // Must be risking significant net material (e.g. Rook for Bishop/Knight = 200, Queen sacrifice = 400+, or pure piece offer = 300+)
+    if (netMaterialRisked >= 150) {
+      if (isPieceEnPrise(chessAfter, move.to, move.piece, movingColor)) {
+        return {
+          isSacrifice: true,
+          sacrificedPiece: move.piece,
+          square: move.to,
+          netMaterialRisked,
+        };
+      }
+    }
+  }
+
+  // 2. Passive sacrifice: Another friendly major or minor piece left en prise
+  const boardAfter = chessAfter.board();
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      const p = boardAfter[r][c];
+      if (!p || p.color !== movingColor) continue;
+      if (p.type === 'p' || p.type === 'k') continue;
+      if (p.square === move.to) continue;
+
+      const pVal = PIECE_VALUES[p.type] || 0;
+      if (pVal < 300) continue;
+
+      if (isPieceEnPrise(chessAfter, p.square, p.type, movingColor)) {
+        const wasEnPriseBefore = isPieceEnPrise(chessBefore, p.square, p.type, movingColor);
+        if (!wasEnPriseBefore) {
+          return {
+            isSacrifice: true,
+            sacrificedPiece: p.type,
+            square: p.square,
+            netMaterialRisked: pVal,
+          };
+        }
+      }
+    }
+  }
+
+  return { isSacrifice: false };
+}
+
+export interface ClassifyInput {
+  accuracy?: number;
+  uci: string;
+  bestMoveUci: string;
+  winRateLoss?: number;
+  evalLossCp?: number;
+  evalBeforePlayer?: number;
+  evalAfterPlayer?: number;
+  winRateBefore?: number;
+  winRateAfter?: number;
+  isBook: boolean;
+  isSacrifice?: boolean;
+  hadForcedMate?: boolean;
+  hasForcedMateAfter?: boolean;
+  hasOpponentForcedMateAfter?: boolean;
+  previousPlayerClassification?: MoveClassification;
+  previousOpponentClassification?: MoveClassification;
+
+  // Backward compatibility fields
+  evalBefore?: number;
+  evalAfter?: number;
+  previousMoveClassification?: MoveClassification;
+  wasOpponentBlunderOrMistake?: boolean;
+}
+
+/**
+ * Standard move classification based on move accuracy alone.
  */
 export function moveCap(
   acc: number,
   moveUci?: string,
   bestMoveUci?: string
 ): MoveClassification {
-  if (acc > 243.1) return 'legendary';
-  if (acc > 124.9) return 'brilliant';
-  if (acc > 112.1) return 'great';
-
   if (
     moveUci &&
     bestMoveUci &&
@@ -101,31 +313,22 @@ export function moveCap(
     return 'best';
   }
 
-  if (acc > 91.44) return 'excellent';
-  if (acc > 79.82) return 'good';
-  if (acc > 63.63) return 'inaccuracy';
-  if (acc > 39.99) return 'mistake';
+  if (acc >= 90.0) return 'excellent';
+  if (acc >= 78.0) return 'good';
+  if (acc >= 58.0) return 'inaccuracy';
+  if (acc >= 35.0) return 'mistake';
   return 'blunder';
 }
 
 /**
- * Exact helper functions from Run_gui.py lines 80-138:
+ * Exact helper functions preserved for backward compatibility
  */
 export function stillLosing(evaluation: number, side: 'w' | 'b'): boolean {
-  if (side === 'b') {
-    return evaluation >= 500;
-  } else {
-    return evaluation <= -500;
-  }
+  return side === 'b' ? evaluation >= 500 : evaluation <= -500;
 }
 
 export function stillWinning(evaluation: number, side: 'w' | 'b'): boolean {
-  // 63 centipawn gain equals 5% winrate gain
-  if (side === 'w') {
-    return (evaluation - 63) >= 500;
-  } else {
-    return (evaluation + 63) <= -500;
-  }
+  return side === 'w' ? (evaluation - 63) >= 500 : (evaluation + 63) <= -500;
 }
 
 export function didAWinningCapture(capturedPiece?: string, movingPiece?: string): boolean {
@@ -155,40 +358,139 @@ export function somethingIsAttackedByLowerPiece(
   if (isPawn) {
     return chess.inCheck();
   }
-
-  const opponent = sideToCheck === 'w' ? 'b' : 'w';
+  const oppColor: Color = sideToCheck === 'w' ? 'b' : 'w';
   const board = chess.board();
-
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
-      const pce = board[r][c];
-      if (!pce || pce.color !== sideToCheck) continue;
-      if (pce.type === 'p' || pce.type === 'k') continue;
-
-      const sq = pce.square;
-      const pceVal = PIECE_VALUES[pce.type] || 0;
-
-      if (chess.isAttacked(sq, opponent)) {
-        for (let or = 0; or < 8; or++) {
-          for (let oc = 0; oc < 8; oc++) {
-            const oppPiece = board[or][oc];
-            if (!oppPiece || oppPiece.color !== opponent) continue;
-            const oppVal = PIECE_VALUES[oppPiece.type] || 0;
-            if (oppVal < pceVal) {
-              return true;
-            }
-          }
-        }
+      const p = board[r][c];
+      if (!p || p.color !== sideToCheck) continue;
+      if (p.type === 'p' || p.type === 'k') continue;
+      const attackers = getAttackers(chess, p.square, oppColor);
+      const pVal = PIECE_VALUES[p.type] || 0;
+      if (attackers.some((a) => a.value < pVal)) {
+        return true;
       }
     }
   }
   return false;
 }
 
+/**
+ * Fair, mathematical, and context-aware move classification.
+ * Matches modern Chess.com expected points and piece sacrifice models.
+ */
 export function classifyMove(input: ClassifyInput): MoveClassification {
-  const { accuracy, uci, bestMoveUci, isBook } = input;
-  if (isBook) return 'book';
-  return moveCap(accuracy, uci, bestMoveUci);
+  if (input.isBook) return 'book';
+
+  const uci = (input.uci || '').trim().toLowerCase();
+  const bestUci = (input.bestMoveUci || '').trim().toLowerCase();
+  const isBestMove = uci.length > 0 && bestUci.length > 0 && uci === bestUci;
+
+  const evalBefore = input.evalBeforePlayer !== undefined ? input.evalBeforePlayer : (input.evalBefore ?? 0);
+  const evalAfter = input.evalAfterPlayer !== undefined ? input.evalAfterPlayer : (input.evalAfter ?? 0);
+  const evalLossCp = input.evalLossCp !== undefined
+    ? input.evalLossCp
+    : Math.max(0, evalBefore - evalAfter);
+
+  const winRateBefore = input.winRateBefore !== undefined ? input.winRateBefore : calculateWinRate(evalBefore);
+  const winRateAfter = input.winRateAfter !== undefined ? input.winRateAfter : calculateWinRate(evalAfter);
+  const winRateLoss = input.winRateLoss !== undefined
+    ? input.winRateLoss
+    : Math.max(0, winRateBefore - winRateAfter);
+
+  const isTieForBest = winRateLoss <= 0.4 && evalLossCp <= 12;
+  const isOptimal = isBestMove || isTieForBest;
+
+  const prevOppClass = input.previousOpponentClassification || (input.wasOpponentBlunderOrMistake ? 'blunder' : undefined);
+  const prevPlayerClass = input.previousPlayerClassification || input.previousMoveClassification;
+
+  // 1. Brilliant: Rare, sound piece sacrifice maintaining clear advantage
+  const isSoundSacrifice =
+    Boolean(input.isSacrifice) &&
+    isOptimal &&
+    evalAfter >= -40 &&
+    winRateAfter >= 48 &&
+    (evalBefore <= 750 || Boolean(input.hasForcedMateAfter)) &&
+    prevPlayerClass !== 'brilliant';
+
+  if (isSoundSacrifice) {
+    return 'brilliant';
+  }
+
+  // 2. Great: Critical best move (turning point, clutch defense, or punishing a blunder)
+  const isOpponentMistakeOrBlunder =
+    prevOppClass === 'blunder' || prevOppClass === 'mistake';
+
+  const isCriticalTurningPoint =
+    (evalBefore <= 100 || winRateBefore <= 55) &&
+    (evalAfter >= 220 || Boolean(input.hasForcedMateAfter));
+
+  const isPunishingBlunder =
+    isOpponentMistakeOrBlunder && evalAfter >= 150 && evalLossCp <= 10;
+
+  const isClutchDefense =
+    evalBefore <= -150 &&
+    evalAfter >= -50 &&
+    (evalAfter - evalBefore) >= 150;
+
+  const isGreatMove =
+    isOptimal &&
+    prevPlayerClass !== 'great' &&
+    (isCriticalTurningPoint || isPunishingBlunder || isClutchDefense);
+
+  if (isGreatMove) {
+    return 'great';
+  }
+
+  // 3. Best: Top engine move or virtually identical
+  if (isOptimal) {
+    return 'best';
+  }
+
+  // 4. Miss: Missed win or missed tactical punish without hanging own king/pieces
+  const hadDecisiveAdvantage =
+    Boolean(input.hadForcedMate) ||
+    evalBefore >= 250 ||
+    isOpponentMistakeOrBlunder;
+
+  const lostDecisiveAdvantage =
+    (Boolean(input.hadForcedMate) && !input.hasForcedMateAfter) ||
+    evalLossCp >= 150 ||
+    winRateLoss >= 10.0;
+
+  const didNotSelfDestruct =
+    evalAfter >= -200 && !input.hasOpponentForcedMateAfter;
+
+  if (hadDecisiveAdvantage && lostDecisiveAdvantage && didNotSelfDestruct) {
+    return 'miss';
+  }
+
+  // 5. Blunder: Massive loss, blundering mate against oneself, or losing > 300 cp
+  if (
+    (Boolean(input.hasOpponentForcedMateAfter) && !input.hadForcedMate) ||
+    winRateLoss > 22.0 ||
+    evalLossCp > 300
+  ) {
+    return 'blunder';
+  }
+
+  // 6. Mistake: Noticeable tactical error or dropping 150-300 cp
+  if (winRateLoss > 12.0 || evalLossCp > 150) {
+    return 'mistake';
+  }
+
+  // 7. Inaccuracy: Sub-optimal move dropping 65-150 cp
+  if (winRateLoss > 5.0 || evalLossCp > 65) {
+    return 'inaccuracy';
+  }
+
+  // 8. Good: Minor concession dropping 30-65 cp
+  if (winRateLoss > 2.0 || evalLossCp > 30) {
+    return 'good';
+  }
+
+  // 9. Excellent: Very close to best move (<= 30 cp, <= 2.0% win rate loss)
+  return 'excellent';
 }
 
 export function getMoveCommentary(
@@ -346,7 +648,7 @@ export const SAMPLE_PGNS: Record<string, { title: string; desc: string; pgn: str
 [Black "Black Player"]
 [Result "0-1"]
 
-1. e2e4 {book best=e2e4=38} e7e5 {book best=e7e5=34} 2. g1f3 {book best=g1f3=48} b8c6 {book best=b8c6=33} 3. f1a6 {excellent best=f1b5=-369} b7b5 {blunder best=b7a6=159} 4. a6b5 {great=157} f8d6 {excellent best=g8f6=135} 5. e1g1 {excellent best=c2c3=138} g8e7 {best=135} 6. d2d4 {good best=c2c3=92} e5d4 {best=114} 7. f3d4 {best=94} c6d4 {inaccuracy best=e8g8=180} 8. d1d4 {best=211} f7f6 {best=212} 9. f2f4 {best=193} e7c6 {best=218} 10. d4d5 a8b8 {best=183} 11. b1c3 {best=201} d8e7 {best=192} 12. b5c6 {good best=g1h1=143} d7c6 {best=128} 13. d5c6 {best=121} c8d7 {best=121} 14. c6c4 {excellent best=c6a6=129} e7f7 {best=146} 15. c4f7 {inaccuracy best=c4d3=78} e8f7 {best=104} 16. b2b3 {inaccuracy best=g1f2=47} d6c5 {best=56} 17. g1h1 {best=47} c5d4 {good best=d7c6=89} 18. f1f3 {excellent best=c1b2=77} h8d8 {best=59} 19. f3d3 {excellent best=c1d2=77} d7b5 {best=60} 20. d3d4 {best=85} d8d4 {best=47} 21. c1e3 {best=100} d4d7 {brilliant=34} 22. e3a7 {best=70} b8a8 {best=34} 23. a7e3 {best=47} b5c6 {best=43} 24. h1g1 {best=55} c6e4 {best=45} 25. c3e4 {best=51} d7e7 {best=45} 26. a2a4 {excellent best=e4f6=51} e7e4 {best=48} 27. g1f2 {best=51} a8e8 {best=67} 28. a1d1 {blunder best=a1e1=-568} e4e3 {great=-612} 29. d1d7 {best=-629} e8e7 {best=-673} 30. d7e7 {best=-700} e3e7 {best=-704} 31. a4a5 {good best=h2h4=-864} c7c5 {best=-949} 32. a5a6 {excellent best=g2g4=-914} e7e2 {blunder best=e7a7=2404} 33. f2e2 {great=2639} f7e6 {excellent best=f7g6=2477} 34. g2g4 {excellent best=a6a7=2813} e6d5 {excellent best=h7h5=2650} 35. a6a7 {best=3474} d5d4 {excellent best=d5e4=3369} 36. f4f5 {excellent best=a7a8q=3163} d4c3 {excellent best=d4e5=2645} 37. h2h3 {excellent best=a7a8q=2218} c3c2 {excellent best=g7g6=2981} 38. h3h4 {excellent best=a7a8q=3292} c2b3 {excellent best=c2c3=2551} 39. g4g5 {excellent best=a7a8q=3373} c5c4 {best=2896} 40. g5g6 {excellent best=a7a8q=3325} c4c3 {excellent best=h7g6=2382} 41. h4h5 {inaccuracy best=a7a8q=638} c3c2 {best=635} 42. g6h7 {blunder best=a7a8q=1} c2c1q {great=1} 43. h5h6 {mistake best=a7a8q=-144} c1c7 {mistake best=c1c2=1} 44. e2e3 {blunder best=a7a8q=-3561} c7a7 {great=-3699} 45. e3e2 {excellent best=e3d3=-3835} a7d4 {blunder best=a7a8=-188} 46. e2f1 {blunder best=h7h8q=M-14} d4f4 {great=M-14} 47. f1g2 {best=M-12} f4h6 {best=M-11} 48. h7h8q {excellent best=g2f3=M-10} h6h8 {best=M-10} 49. g2f3 {excellent best=g2g3=M-10} h8h2 {excellent best=h8h7=M-10} 50. f3e3 {best=M-7} h2e5 {excellent best=h2h4=M-8} 51. e3f3 {excellent best=e3f2=M-7} e5f5 {best=M-7} 52. f3g3 {excellent best=f3g2=M-6} f5e4 {excellent best=b3c3=M-6} 53. g3f2 {excellent best=g3h3=M-5} e4f4 {excellent best=e4g4=M-6} 54. f2g1 {excellent best=f2g2=M-6} f4f3 {best=M-5} 55. g1h2 {best=M-5} f6f5 {excellent best=f3g4=M-4} 56. h2g1 {best=M-4} f5f4 {best=M-3} 57. g1h2 {best=M-3} f3g4 {best=M-2} 58. h2h1 {best=M-2} f4f3 {best=M-1} 59. h1h2 {best=M-1} g4g2 {best=M0} 0-1`,
+1. e2e4 {book best=e2e4=38} e7e5 {book best=e7e5=34} 2. g1f3 {book best=g1f3=48} b8c6 {book best=b8c6=33} 3. f1a6 {blunder best=f1b5=-369} b7b5 {miss best=b7a6=159} 4. a6b5 {best=157} f8d6 {excellent best=g8f6=135} 5. e1g1 {excellent best=c2c3=138} g8e7 {best=135} 6. d2d4 {good best=c2c3=92} e5d4 {best=114} 7. f3d4 {best=94} c6d4 {inaccuracy best=e8g8=180} 8. d1d4 {best=211} f7f6 {best=212} 9. f2f4 {best=193} e7c6 {best=218} 10. d4d5 a8b8 {best=183} 11. b1c3 {best=201} d8e7 {best=192} 12. b5c6 {good best=g1h1=143} d7c6 {best=128} 13. d5c6 {best=121} c8d7 {best=121} 14. c6c4 {excellent best=c6a6=129} e7f7 {best=146} 15. c4f7 {inaccuracy best=c4d3=78} e8f7 {best=104} 16. b2b3 {inaccuracy best=g1f2=47} d6c5 {best=56} 17. g1h1 {best=47} c5d4 {good best=d7c6=89} 18. f1f3 {excellent best=c1b2=77} h8d8 {best=59} 19. f3d3 {excellent best=c1d2=77} d7b5 {best=60} 20. d3d4 {brilliant=85} d8d4 {best=47} 21. c1e3 {best=100} d4d7 {best=34} 22. e3a7 {best=70} b8a8 {best=34} 23. a7e3 {best=47} b5c6 {best=43} 24. h1g1 {best=55} c6e4 {best=45} 25. c3e4 {best=51} d7e7 {best=45} 26. a2a4 {excellent best=e4f6=51} e7e4 {best=48} 27. g1f2 {best=51} a8e8 {best=67} 28. a1d1 {blunder best=a1e1=-568} e4e3 {great=-612} 29. d1d7 {best=-629} e8e7 {best=-673} 30. d7e7 {best=-700} e3e7 {best=-704} 31. a4a5 {good best=h2h4=-864} c7c5 {great=-949} 32. a5a6 {excellent best=g2g4=-914} e7e2 {blunder best=e7a7=2404} 33. f2e2 {great=2639} f7e6 {excellent best=f7g6=2477} 34. g2g4 {excellent best=a6a7=2813} e6d5 {excellent best=h7h5=2650} 35. a6a7 {best=3474} d5d4 {excellent best=d5e4=3369} 36. f4f5 {miss best=a7a8q=3163} d4c3 {excellent best=d4e5=2645} 37. h2h3 {miss best=a7a8q=2218} c3c2 {blunder best=g7g6=2981} 38. h3h4 {excellent best=a7a8q=3292} c2b3 {excellent best=c2c3=2551} 39. g4g5 {excellent best=a7a8q=3373} c5c4 {best=2896} 40. g5g6 {excellent best=a7a8q=3325} c4c3 {excellent best=h7g6=2382} 41. h4h5 {miss best=a7a8q=638} c3c2 {best=635} 42. g6h7 {miss best=a7a8q=1} c2c1q {great=1} 43. h5h6 {mistake best=a7a8q=-144} c1c7 {mistake best=c1c2=1} 44. e2e3 {blunder best=a7a8q=-3561} c7a7 {great=-3699} 45. e3e2 {excellent best=e3d3=-3835} a7d4 {miss best=a7a8=-188} 46. e2f1 {blunder best=h7h8q=M-14} d4f4 {great=M-14} 47. f1g2 {best=M-12} f4h6 {best=M-11} 48. h7h8q {excellent best=g2f3=M-10} h6h8 {best=M-10} 49. g2f3 {excellent best=g2g3=M-10} h8h2 {excellent best=h8h7=M-10} 50. f3e3 {best=M-7} h2e5 {excellent best=h2h4=M-8} 51. e3f3 {excellent best=e3f2=M-7} e5f5 {best=M-7} 52. f3g3 {excellent best=f3g2=M-6} f5e4 {excellent best=b3c3=M-6} 53. g3f2 {excellent best=g3h3=M-5} e4f4 {excellent best=e4g4=M-6} 54. f2g1 {excellent best=f2g2=M-6} f4f3 {best=M-5} 55. g1h2 {best=M-5} f6f5 {excellent best=f3g4=M-4} 56. h2g1 {best=M-4} f5f4 {best=M-3} 57. g1h2 {best=M-3} f3g4 {best=M-2} 58. h2h1 {best=M-2} f4f3 {best=M-1} 59. h1h2 {best=M-1} g4g2 {best=M0} 0-1`,
   },
   opera: {
     title: "The Opera Game (1858)",

@@ -5,6 +5,7 @@ import {
   calculateEstimatedElo,
   calculateWinRate,
   classifyMove,
+  detectPieceSacrifice,
   determineGamePhase,
   gamePhaseCap,
   getHarmonicMean,
@@ -322,7 +323,8 @@ export async function analyzeGame(
   };
 
   const moves: MoveAnalysis[] = [];
-  let prevClassification: MoveClassification | undefined = undefined;
+  let prevWhiteClass: MoveClassification | undefined = undefined;
+  let prevBlackClass: MoveClassification | undefined = undefined;
 
   for (let p = 0; p < totalPlies; p++) {
     const move = history[p];
@@ -334,9 +336,6 @@ export async function analyzeGame(
     const inBook = isBookMove(uciMoves, p);
 
     const moveIdx = Math.floor(p / 2);
-    let rawAcc = isWhite ? accuracy_lists[moveIdx] : accuracy_lists_black[moveIdx];
-    let moveAcc = Math.round((rawAcc ?? 100) * 10) / 10;
-
     const bestMoveUci = isWhite ? w_best_moves[moveIdx] || uci : b_best_moves[moveIdx] || uci;
     const evalAfterCp = centipawns[p + 1];
     const mateAfter = mates[p + 1];
@@ -348,8 +347,6 @@ export async function analyzeGame(
 
     const chessBefore = new Chess(fenBefore);
     const chessAfter = new Chess(fenAfter);
-    const side: 'w' | 'b' = isWhite ? 'w' : 'b';
-    const oppSide: 'w' | 'b' = isWhite ? 'b' : 'w';
 
     const isBestMove = uci.trim().toLowerCase() === bestMoveUci.trim().toLowerCase();
 
@@ -358,11 +355,11 @@ export async function analyzeGame(
       mateBefore !== null
         ? isWhite
           ? mateBefore > 0
-            ? 30000
-            : -30000
+            ? 30000 - Math.min(mateBefore, 100) * 10
+            : -30000 - Math.max(mateBefore, -100) * 10
           : mateBefore < 0
-          ? 30000
-          : -30000
+          ? 30000 - Math.min(Math.abs(mateBefore), 100) * 10
+          : -30000 - Math.max(mateBefore, -100) * 10
         : isWhite
         ? centipawns[p]
         : -centipawns[p];
@@ -371,16 +368,16 @@ export async function analyzeGame(
       mateAfter !== null
         ? isWhite
           ? mateAfter > 0
-            ? 30000
-            : -30000
+            ? 30000 - Math.min(mateAfter, 100) * 10
+            : -30000 - Math.max(mateAfter, -100) * 10
           : mateAfter < 0
-          ? 30000
-          : -30000
+          ? 30000 - Math.min(Math.abs(mateAfter), 100) * 10
+          : -30000 - Math.max(mateAfter, -100) * 10
         : isWhite
         ? evalAfterCp
         : -evalAfterCp;
 
-    const evalLossCp = evalBeforePlayer - evalAfterPlayer;
+    const evalLossCp = Math.max(0, evalBeforePlayer - evalAfterPlayer);
 
     const hadForcedMate = isWhite
       ? mateBefore !== null && mateBefore > 0
@@ -390,131 +387,78 @@ export async function analyzeGame(
       ? mateAfter !== null && mateAfter > 0
       : mateAfter !== null && mateAfter < 0;
 
-    // 1. Initial move classification (Run_gui.py lines 36-58)
-    let moveClass: MoveClassification = moveCap(moveAcc, uci, bestMoveUci);
+    const hasOpponentForcedMateAfter = isWhite
+      ? mateAfter !== null && mateAfter < 0
+      : mateAfter !== null && mateAfter > 0;
 
-    // 1b. Handle Missed Forced Checkmate & Massive Centipawn Drops in Winning Positions
-    // (Fixes sigmoid saturation where losing M7 -> +11.3 was classified as "Excellent")
-    if (!isBestMove && !inBook) {
-      if (hadForcedMate && !hasForcedMateAfter) {
-        // Player had a forced checkmate, but played a move that threw it away!
-        if (evalLossCp >= 300 || move.piece === 'q') {
-          // Blundered queen, piece, or dropped massive eval -> BLUNDER
-          moveClass = 'blunder';
-          moveAcc = Math.min(moveAcc, 18.0);
-        } else {
-          // Threw away forced mate, but still winning comfortably without hanging a piece -> MISS
-          moveClass = 'miss';
-          moveAcc = Math.min(moveAcc, 40.0);
-        }
-        if (isWhite) accuracy_lists[moveIdx] = moveAcc;
-        else accuracy_lists_black[moveIdx] = moveAcc;
-      } else if (evalBeforePlayer >= 300) {
-        // Player was winning by at least 3 pawns
-        if (evalLossCp >= 500) {
-          // Blundered a queen, rook, or 5+ pawns -> BLUNDER
-          moveClass = 'blunder';
-          moveAcc = Math.min(moveAcc, 18.0);
-          if (isWhite) accuracy_lists[moveIdx] = moveAcc;
-          else accuracy_lists_black[moveIdx] = moveAcc;
-        } else if (evalLossCp >= 300) {
-          // Blundered a minor piece -> MISTAKE
-          moveClass = 'mistake';
-          moveAcc = Math.min(moveAcc, 38.0);
-          if (isWhite) accuracy_lists[moveIdx] = moveAcc;
-          else accuracy_lists_black[moveIdx] = moveAcc;
-        } else if (evalLossCp >= 150) {
-          // Noticeable inaccuracy
-          if (['excellent', 'best', 'good'].includes(moveClass)) {
-            moveClass = 'inaccuracy';
-            moveAcc = Math.min(moveAcc, 62.0);
-            if (isWhite) accuracy_lists[moveIdx] = moveAcc;
-            else accuracy_lists_black[moveIdx] = moveAcc;
+    // Detect genuine sound piece sacrifice
+    const lastMove = p > 0 ? history[p - 1] : undefined;
+    const sacResult = detectPieceSacrifice(
+      chessBefore,
+      chessAfter,
+      {
+        from: move.from as Square,
+        to: move.to as Square,
+        piece: move.piece,
+        captured: move.captured,
+        color: move.color,
+      },
+      lastMove
+        ? {
+            from: lastMove.from as Square,
+            to: lastMove.to as Square,
+            piece: lastMove.piece,
+            captured: lastMove.captured,
           }
-        }
-      }
-    }
+        : undefined
+    );
+    const isSacrifice = sacResult.isSacrifice;
 
-    // 2. Contextual evaluation variables (Run_gui.py lines 341-348, 380-387)
-    const inCheckEarlier = chessBefore.inCheck();
-    const hangedEarlier = somethingIsAttackedByLowerPiece(chessBefore, side);
-    const isPieceRQ = move.piece === 'r' || move.piece === 'q';
-    const didWinningCap = didAWinningCapture(move.captured, move.piece);
-    const isSacrifice = Boolean((hangedEarlier || isPieceRQ) && !didWinningCap && !inCheckEarlier);
-
-    // In Run_gui.py, eval is White's perspective centipawns
-    const currentEval = evalAfterCp;
-
-    // 3. Sacrifice logic from Run_gui.py lines 350-365 (White) & lines 397-415 (Black):
-    if (!['blunder', 'mistake', 'inaccuracy', 'good'].includes(moveClass)) {
-      if (mateAfter === null) {
-        const condEqualOrOppBlunder =
-          positionEqualish(currentEval) ||
-          (prevClassification &&
-            ['blunder', 'mistake'].includes(prevClassification) &&
-            !positionWinningBy(oppSide, currentEval));
-
-        const attackedLower =
-          somethingIsAttackedByLowerPiece(chessAfter, side, true) ||
-          somethingIsAttackedByLowerPiece(chessAfter, side, false);
-
-        if (
-          condEqualOrOppBlunder &&
-          attackedLower &&
-          !['brilliant', 'legendary'].includes(moveClass) &&
-          !inCheckEarlier &&
-          !didWinningCap
-        ) {
-          if (hangedEarlier || isPieceRQ) {
-            moveClass = 'brilliant';
-          } else {
-            moveClass = 'great';
-            if (prevClassification === 'blunder') moveClass = 'great';
-            if (prevClassification === 'mistake') moveClass = 'brilliant';
-          }
-        }
-      }
-    }
-
-    // 4. Filtering brilliant moves from Run_gui.py lines 418-427:
-    // "filtering brilliant moves, don't make it brilliant if we are still losing also if we are winning in way high margin"
-    if (mateAfter === null && moveClass === 'brilliant') {
-      if (stillLosing(currentEval, side) || stillWinning(currentEval, side)) {
-        moveClass = 'best';
-      }
-    }
-
-    // 5. If earlier move was blunder and current move is best/excellent, it is great (Run_gui.py lines 428-434):
-    if (prevClassification === 'blunder' && ['best', 'excellent'].includes(moveClass)) {
-      moveClass = 'great';
-    }
-
-    // 5b. Guard winning queen/major piece captures from ever being classified as blunder or mistake while winning
-    if (['blunder', 'mistake'].includes(moveClass) && didWinningCap && stillWinning(currentEval, side)) {
-      moveClass = prevClassification === 'blunder' ? 'great' : 'best';
-    }
-
-    // 6. If consecutive moves are both brilliant/great/legendary of same type (Run_gui.py lines 438-446):
-    if (
-      prevClassification &&
-      ['great', 'legendary', 'brilliant'].includes(moveClass) &&
-      prevClassification === moveClass
-    ) {
-      moveClass = 'best';
-    }
-
-    // 7. Flag book moves (Run_gui.py lines 448-450):
-    if (inBook) {
-      moveClass = 'book';
-    }
-
-    const classification: MoveClassification = moveClass;
-    prevClassification = classification;
+    // Unified mathematical classification
+    const classification = classifyMove({
+      uci,
+      bestMoveUci,
+      evalBeforePlayer,
+      evalAfterPlayer,
+      winRateBefore,
+      winRateAfter,
+      winRateLoss,
+      evalLossCp,
+      isBook: inBook,
+      isSacrifice,
+      hadForcedMate,
+      hasForcedMateAfter,
+      hasOpponentForcedMateAfter,
+      previousPlayerClassification: isWhite ? prevWhiteClass : prevBlackClass,
+      previousOpponentClassification: isWhite ? prevBlackClass : prevWhiteClass,
+    });
 
     if (isWhite) {
+      prevWhiteClass = classification;
       whiteCounts[classification] = (whiteCounts[classification] || 0) + 1;
     } else {
+      prevBlackClass = classification;
       blackCounts[classification] = (blackCounts[classification] || 0) + 1;
+    }
+
+    // Move accuracy bounded to 0..100%
+    let moveAcc = calculateAccuracy(winRateBefore, winRateAfter);
+    if (inBook || isBestMove) {
+      moveAcc = 100.0;
+    } else if (classification === 'blunder') {
+      moveAcc = Math.min(moveAcc, 25.0);
+    } else if (classification === 'miss') {
+      moveAcc = Math.min(moveAcc, 38.0);
+    } else if (classification === 'mistake') {
+      moveAcc = Math.min(moveAcc, 48.0);
+    } else if (classification === 'inaccuracy') {
+      moveAcc = Math.min(moveAcc, 68.0);
+    }
+
+    if (isWhite) {
+      accuracy_lists[moveIdx] = moveAcc;
+    } else {
+      accuracy_lists_black[moveIdx] = moveAcc;
     }
 
     // Display string

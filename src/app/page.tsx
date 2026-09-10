@@ -14,7 +14,7 @@ import { EvaluationChart } from '@/components/EvaluationChart';
 import { PgnInputModal } from '@/components/PgnInputModal';
 import { EngineSelectModal } from '@/components/EngineSelectModal';
 import { AnalysisProgressBar } from '@/components/AnalysisProgressBar';
-import { SAMPLE_PGNS, calculateWinRate, calculateAccuracy, getHarmonicMean, calculateEstimatedElo, determineGamePhase, getMoveCommentary } from '@/lib/analyzer';
+import { SAMPLE_PGNS, calculateWinRate, calculateAccuracy, getHarmonicMean, calculateEstimatedElo, determineGamePhase, getMoveCommentary, classifyMove, detectPieceSacrifice } from '@/lib/analyzer';
 import { identifyOpening } from '@/lib/openings';
 import { analyzeGame, ReviewProgress, loadGameFromPgn } from '@/lib/gameReviewer';
 import { engineManager, EngineConfig } from '@/lib/engineManager';
@@ -190,22 +190,143 @@ export default function ChessAnalyzerApp() {
         legendary: 0,
       };
 
+      let prevWhiteClass: MoveClassification | undefined = undefined;
+      let prevBlackClass: MoveClassification | undefined = undefined;
+
       const moves: MoveAnalysis[] = history.map((m, idx) => {
         const anno = rawAnnotations.get(idx);
         const isWhite = m.color === 'w';
         const moveIdx = Math.floor(idx / 2);
         const rawAcc = isWhite ? accuracy_lists[moveIdx] : accuracy_lists_black[moveIdx];
-        const moveAcc = Math.round((rawAcc ?? 100) * 10) / 10;
+        let moveAcc = Math.round((rawAcc ?? 100) * 10) / 10;
         const score = centipawns[idx + 1];
         const mate = mates[idx + 1];
+        const mateBefore = mates[idx];
 
-        const classification: MoveClassification =
-          anno?.classification || (idx < longestBook ? 'book' : 'best');
+        const winRateBefore = isWhite ? win_rate_lists[idx] : win_rate_lists_black[idx];
+        const winRateAfter = isWhite ? win_rate_lists[idx + 1] : win_rate_lists_black[idx + 1];
+        const winRateLoss = Math.max(0, Math.round((winRateBefore - winRateAfter) * 10) / 10);
+
+        const bestMoveUci = anno?.best || (m.lan || `${m.from}${m.to}`);
+        const uci = m.lan || `${m.from}${m.to}`;
+        const isBestMove = uci.trim().toLowerCase() === bestMoveUci.trim().toLowerCase();
+        const inBook = idx < longestBook;
+
+        let isSacrifice = false;
+        let classification: MoveClassification;
+
+        if (inBook) {
+          classification = 'book';
+        } else if (hasPrecomputedEvals) {
+          const chessBefore = new Chess(m.before);
+          const chessAfter = new Chess(m.after);
+          const lastMove = idx > 0 ? history[idx - 1] : undefined;
+          const sacResult = detectPieceSacrifice(
+            chessBefore,
+            chessAfter,
+            {
+              from: m.from as Square,
+              to: m.to as Square,
+              piece: m.piece,
+              captured: m.captured,
+              color: m.color,
+            },
+            lastMove
+              ? {
+                  from: lastMove.from as Square,
+                  to: lastMove.to as Square,
+                  piece: lastMove.piece,
+                  captured: lastMove.captured,
+                }
+              : undefined
+          );
+          isSacrifice = sacResult.isSacrifice;
+
+          const evalBeforePlayer =
+            mateBefore !== null
+              ? isWhite
+                ? mateBefore > 0
+                  ? 30000 - Math.min(mateBefore, 100) * 10
+                  : -30000 - Math.max(mateBefore, -100) * 10
+                : mateBefore < 0
+                ? 30000 - Math.min(Math.abs(mateBefore), 100) * 10
+                : -30000 - Math.max(mateBefore, -100) * 10
+              : isWhite
+              ? centipawns[idx]
+              : -centipawns[idx];
+
+          const evalAfterPlayer =
+            mate !== null
+              ? isWhite
+                ? mate > 0
+                  ? 30000 - Math.min(mate, 100) * 10
+                  : -30000 - Math.max(mate, -100) * 10
+                : mate < 0
+                ? 30000 - Math.min(Math.abs(mate), 100) * 10
+                : -30000 - Math.max(mate, -100) * 10
+              : isWhite
+              ? score
+              : -score;
+
+          const evalLossCp = Math.max(0, evalBeforePlayer - evalAfterPlayer);
+
+          const hadForcedMate = isWhite
+            ? mateBefore !== null && mateBefore > 0
+            : mateBefore !== null && mateBefore < 0;
+
+          const hasForcedMateAfter = isWhite
+            ? mate !== null && mate > 0
+            : mate !== null && mate < 0;
+
+          const hasOpponentForcedMateAfter = isWhite
+            ? mate !== null && mate < 0
+            : mate !== null && mate > 0;
+
+          classification = classifyMove({
+            uci,
+            bestMoveUci,
+            evalBeforePlayer,
+            evalAfterPlayer,
+            winRateBefore,
+            winRateAfter,
+            winRateLoss,
+            evalLossCp,
+            isBook: inBook,
+            isSacrifice,
+            hadForcedMate,
+            hasForcedMateAfter,
+            hasOpponentForcedMateAfter,
+            previousPlayerClassification: isWhite ? prevWhiteClass : prevBlackClass,
+            previousOpponentClassification: isWhite ? prevBlackClass : prevWhiteClass,
+          });
+        } else {
+          classification = anno?.classification || 'best';
+        }
 
         if (isWhite) {
+          prevWhiteClass = classification;
           whiteCounts[classification] = (whiteCounts[classification] || 0) + 1;
         } else {
+          prevBlackClass = classification;
           blackCounts[classification] = (blackCounts[classification] || 0) + 1;
+        }
+
+        if (inBook || isBestMove) {
+          moveAcc = 100.0;
+        } else if (classification === 'blunder') {
+          moveAcc = Math.min(moveAcc, 25.0);
+        } else if (classification === 'miss') {
+          moveAcc = Math.min(moveAcc, 38.0);
+        } else if (classification === 'mistake') {
+          moveAcc = Math.min(moveAcc, 48.0);
+        } else if (classification === 'inaccuracy') {
+          moveAcc = Math.min(moveAcc, 68.0);
+        }
+
+        if (isWhite) {
+          accuracy_lists[moveIdx] = moveAcc;
+        } else {
+          accuracy_lists_black[moveIdx] = moveAcc;
         }
 
         let displayEval = '0.0';
@@ -216,14 +337,12 @@ export default function ChessAnalyzerApp() {
           displayEval = score > 0 ? `+${pawns}` : pawns;
         }
 
-        const bestMoveUci = anno?.best || (m.lan || `${m.from}${m.to}`);
-
         return {
           ply: idx + 1,
           moveNumber: Math.floor(idx / 2) + 1,
           color: m.color,
           san: m.san,
-          uci: m.lan || `${m.from}${m.to}`,
+          uci,
           from: m.from,
           to: m.to,
           captured: m.captured,
@@ -232,9 +351,9 @@ export default function ChessAnalyzerApp() {
           score,
           mate,
           displayEval,
-          winRateBefore: isWhite ? Math.round(win_rate_lists[idx] * 10) / 10 : Math.round(win_rate_lists_black[idx] * 10) / 10,
-          winRateAfter: isWhite ? Math.round(win_rate_lists[idx + 1] * 10) / 10 : Math.round(win_rate_lists_black[idx + 1] * 10) / 10,
-          winRateLoss: Math.max(0, Math.round(((isWhite ? win_rate_lists[idx] : win_rate_lists_black[idx]) - (isWhite ? win_rate_lists[idx + 1] : win_rate_lists_black[idx + 1])) * 10) / 10),
+          winRateBefore: isWhite ? Math.round(winRateBefore * 10) / 10 : Math.round(winRateBefore * 10) / 10,
+          winRateAfter: isWhite ? Math.round(winRateAfter * 10) / 10 : Math.round(winRateAfter * 10) / 10,
+          winRateLoss,
           accuracy: moveAcc,
           classification,
           bestMoveUci,
@@ -243,7 +362,7 @@ export default function ChessAnalyzerApp() {
           bestMoveMate: mate,
           pv: '',
           commentary: getMoveCommentary(classification, m.san, bestMoveUci, currentEngineName),
-          isSacrifice: false,
+          isSacrifice,
           gamePhase: determineGamePhase(m.before),
         };
       });
