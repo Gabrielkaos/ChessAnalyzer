@@ -29,44 +29,12 @@ function getEngineMetadata(fileName: string): {
   features: string;
   description: string;
 } {
-  const lower = fileName.toLowerCase();
-  if (lower.includes('v3') || lower.includes('x86-64-v3')) {
-    return {
-      name: 'GOOB 2.2-BETA (v3 - AVX2/BMI2)',
-      tier: 3,
-      features: 'AVX2 + BMI2 (PEXT Bitboards)',
-      description: 'Fast hardware bitboard attacks. Optimal for modern CPUs (Haswell / Zen 3+).',
-    };
-  }
-  if (lower.includes('native')) {
-    return {
-      name: 'GOOB 2.2-BETA (Native Host)',
-      tier: 4,
-      features: 'Host CPU ISA & Cache Tuned',
-      description: 'Compiled with -march=native tuned for this host machine microarchitecture.',
-    };
-  }
-  if (lower.includes('v2') || lower.includes('x86-64-v2')) {
-    return {
-      name: 'GOOB 2.2-BETA (v2 - SSE4.2/POPCNT)',
-      tier: 2,
-      features: 'SSE4.2 + Hardware POPCNT',
-      description: 'Hardware popcount via __SSE4_2__ for tbprobe and bitboards (2008+).',
-    };
-  }
-  if (lower.includes('x86-64') || lower.includes('goob')) {
-    return {
-      name: 'GOOB 2.2-BETA (x86-64 Baseline)',
-      tier: 1,
-      features: 'Baseline SSE2 (Universal Compatibility)',
-      description: 'Widest compatibility, magic slider fallback. Runs on every 64-bit x86 computer.',
-    };
-  }
+  const cleanName = fileName.replace(/\.exe$/i, '');
   return {
-    name: fileName.replace(/\.exe$/i, ''),
+    name: cleanName,
     tier: 1,
-    features: process.platform === 'win32' ? 'Windows Executable' : 'Custom UCI',
-    description: 'Custom UCI chess engine.',
+    features: process.platform === 'win32' ? 'Windows Executable' : 'Native UCI Binary',
+    description: `Native UCI chess engine (${cleanName}).`,
   };
 }
 
@@ -123,7 +91,7 @@ function scanForEngines(): EngineInfo[] {
           const isWindowsExe = buffer[0] === 0x4d && buffer[1] === 0x5a;
           const isMachO = buffer[0] === 0xcf && buffer[1] === 0xfa && buffer[2] === 0xed && buffer[3] === 0xfe;
 
-          if (!isElf && !isWindowsExe && !isMachO && !entry.name.includes('GOOB') && !entry.name.includes('native')) {
+          if (!isElf && !isWindowsExe && !isMachO && !entry.name.endsWith('.exe')) {
             continue;
           }
 
@@ -139,7 +107,7 @@ function scanForEngines(): EngineInfo[] {
           discovered.push({
             id: entry.name,
             name: meta.name,
-            author: entry.name.includes('GOOB') ? 'Gabriel Montes' : 'Local UCI Author',
+            author: 'Local UCI Engine',
             path: fullPath,
             isDefault: false,
             tier: meta.tier,
@@ -182,8 +150,8 @@ function resolveEngineExecutable(enginePath?: string): string {
   const engines = scanForEngines();
   const compatibleEngines = engines.filter((e) => e.isCompatible);
 
-  // If default or 'goob' requested, pick the highest compatible engine
-  if (req === 'goob' || req === 'default') {
+  // If default requested, pick the highest compatible engine
+  if (req === 'default') {
     const def = compatibleEngines.find((e) => e.isDefault) || compatibleEngines[0] || engines[0];
     if (def) return def.path;
   }
@@ -194,8 +162,6 @@ function resolveEngineExecutable(enginePath?: string): string {
     const candidates = [
       path.resolve(process.cwd(), 'ChessAnalyzer', 'engines', base),
       path.resolve(process.cwd(), 'engines', base),
-      path.resolve(process.cwd(), 'ChessAnalyzer', 'engines', 'GOOB-2.2-BETA-x86-64-v3'),
-      path.resolve(process.cwd(), 'ChessAnalyzer', 'engines', 'GOOB-2.2-BETA-x86-64'),
       path.resolve('/tmp', base),
     ];
     for (const cand of candidates) {
@@ -343,7 +309,7 @@ export async function GET() {
       optimalEngine: defaultEng || null,
       message:
         isWindows && compatibleEngines.length === 0
-          ? 'Running on Windows: Native Linux ELF binaries cannot run natively. WebAssembly Stockfish 18 is automatically active for in-browser local compute. You can also place a Windows UCI .exe in ChessAnalyzer/engines/.'
+          ? 'Running on Windows: WebAssembly Stockfish 19 is active for in-browser local compute. You can also place a Windows UCI .exe in ChessAnalyzer/engines/.'
           : undefined,
     });
   } catch (error: unknown) {

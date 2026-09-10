@@ -57,7 +57,7 @@ export default function ChessAnalyzerApp() {
   const [engineConfig, setEngineConfig] = useState<EngineConfig>({
     type: 'builtin',
     nativePath: '',
-    nativeName: 'Stockfish 18 (NNUE)',
+    nativeName: 'Stockfish 19 (WASM)',
     customFileName: '',
     depth: 18,
   });
@@ -66,24 +66,19 @@ export default function ChessAnalyzerApp() {
   const [filterClassification, setFilterClassification] = useState<MoveClassification | null>(null);
 
   const currentEngineName = useMemo(() => {
-    if (engineConfig.type === 'goob-wasm') {
-      return 'GOOB 2.2 (WASM)';
-    }
     if (engineConfig.type === 'native') {
-      return engineConfig.nativeName || 'GOOB 2.2-BETA';
+      return engineConfig.nativeName || 'Custom Native UCI';
     }
     if (engineConfig.type === 'custom-file') {
       return engineConfig.customFileName || 'Custom Engine';
     }
-    return 'Stockfish 18 (NNUE)';
+    return 'Stockfish 19 (WASM)';
   }, [engineConfig]);
 
   const shortEngineLabel = useMemo(() => {
-    let name = 'SF 18';
+    let name = 'SF 19';
     if (engineConfig.type === 'native') {
-      name = engineConfig.nativeName?.replace('-BETA', '') || 'GOOB';
-    } else if (engineConfig.type === 'goob-wasm') {
-      name = 'GOOB';
+      name = engineConfig.nativeName || 'Native';
     } else if (engineConfig.type === 'custom-file') {
       name = engineConfig.customFileName || 'Custom';
     }
@@ -1163,12 +1158,10 @@ export default function ChessAnalyzerApp() {
           setEngineConfig(newConfig);
           const name =
             newConfig.type === 'native'
-              ? newConfig.nativeName || 'GOOB 2.2-BETA'
+              ? newConfig.nativeName || 'Custom Native UCI'
               : newConfig.type === 'custom-file'
               ? newConfig.customFileName || 'Custom Engine'
-              : newConfig.type === 'goob-wasm'
-              ? 'GOOB 2.2 (WASM)'
-              : 'Stockfish 18 (NNUE)';
+              : 'Stockfish 19 (WASM)';
           showToast(`Engine switched to: ${name} (Depth ${newConfig.depth || 18})`);
         }}
       />

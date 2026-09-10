@@ -23,15 +23,15 @@ export class StockfishService {
           typeof WebAssembly === 'object' &&
           WebAssembly.validate(Uint8Array.of(0x0, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00));
 
-        const scriptUrl = '/stockfish/stockfish.js';
-        this.worker = new Worker(scriptUrl);
+        const scriptUrl = '/stockfish/stockfish-worker.js';
+        this.worker = new Worker(scriptUrl, { type: 'module' });
 
         this.worker.onmessage = (event: MessageEvent) => {
           this.handleMessage(typeof event.data === 'string' ? event.data : String(event.data));
         };
 
         this.worker.onerror = (err) => {
-          console.warn('Stockfish 18 Worker error:', err);
+          console.warn('Stockfish 19 Worker error:', err);
         };
 
         // Wait for readyok or uciok

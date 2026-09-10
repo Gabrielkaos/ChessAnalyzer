@@ -1,8 +1,7 @@
 import { EngineEvaluation } from '@/types/chess';
 import { stockfishService } from './stockfishService';
-import { goobService } from './goobService';
 
-export type EngineType = 'native' | 'builtin' | 'goob-wasm' | 'custom-file';
+export type EngineType = 'builtin' | 'native' | 'custom-file';
 
 export interface DiscoveredNativeEngine {
   id: string;
@@ -28,7 +27,7 @@ class EngineManager {
   private config: EngineConfig = {
     type: 'builtin',
     nativePath: '',
-    nativeName: 'Stockfish 18 (NNUE)',
+    nativeName: 'Stockfish 19 (WASM)',
     customFileName: '',
     depth: 18,
   };
@@ -39,11 +38,6 @@ class EngineManager {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      const isLocalhost =
-        window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1' ||
-        window.location.hostname === '0.0.0.0';
-
       const saved = localStorage.getItem('chess_engine_config');
       if (saved) {
         try {
@@ -52,62 +46,40 @@ class EngineManager {
         } catch {}
       }
 
-      // If running on Vercel or remote web:
-      // Default to In-Browser Web Worker (Stockfish 18 WASM) so that 100% of the game review
-      // runs on the user's local machine CPU with ZERO network latency!
-      if (!isLocalhost && (!saved || this.config.type === 'native')) {
+      // Default to In-Browser Web Worker (Stockfish 19 WASM)
+      if (!saved || this.config.type === 'builtin') {
         this.config.type = 'builtin';
-        this.config.nativeName = 'Stockfish 18 (NNUE)';
+        this.config.nativeName = 'Stockfish 19 (WASM)';
         if (!this.config.depth || this.config.depth > 20) this.config.depth = 18;
       }
 
+      const isLocalhost =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname === '0.0.0.0';
+
       if (isLocalhost) {
-        if (!saved) {
-          this.config.type = 'native';
-          this.config.nativeName = 'GOOB 2.2-BETA';
-          this.config.nativePath = 'default';
-        }
         this.detectNativeEngines();
       }
     }
   }
 
-  public selectGoob(depth?: number) {
-    this.setConfig({
-      type: 'native',
-      nativeName: this.config.nativeName || 'GOOB 2.2-BETA',
-      nativePath: this.config.nativePath || 'default',
-      depth: depth ?? this.config.depth ?? 20,
-    });
-  }
-
-  public selectGoobWasm(depth?: number) {
-    this.setConfig({
-      type: 'goob-wasm',
-      nativeName: 'GOOB 2.2 (WASM)',
-      depth: depth ?? this.config.depth ?? 18,
-    });
-  }
-
   public selectStockfish(depth?: number) {
     this.setConfig({
       type: 'builtin',
-      nativeName: 'Stockfish 18 (NNUE)',
+      nativeName: 'Stockfish 19 (WASM)',
       depth: depth ?? this.config.depth ?? 18,
     });
   }
 
   public getActiveEngineName(): string {
-    if (this.config.type === 'goob-wasm') {
-      return 'GOOB 2.2 (WASM)';
-    }
     if (this.config.type === 'native') {
-      return this.config.nativeName || 'GOOB 2.2-BETA';
+      return this.config.nativeName || 'Custom Native UCI';
     }
     if (this.config.type === 'custom-file') {
       return this.config.customFileName || 'Custom Engine';
     }
-    return 'Stockfish 18 (NNUE)';
+    return 'Stockfish 19 (WASM)';
   }
 
   public getConfig(): EngineConfig {
@@ -128,16 +100,16 @@ class EngineManager {
       if (!res.ok) return [];
       const data = await res.json();
       if (data.available && data.engines && data.engines.length > 0) {
-        const goob = data.optimalEngine || data.engines.find((e: DiscoveredNativeEngine) => e.isDefault || e.name.includes('GOOB')) || data.engines[0];
-        if (!this.config.nativePath || this.config.nativePath === 'default' || this.config.nativeName?.includes('GOOB')) {
-          this.config.nativePath = goob.path;
-          this.config.nativeName = goob.name;
+        const first = data.optimalEngine || data.engines[0];
+        if (!this.config.nativePath || this.config.nativePath === 'default') {
+          this.config.nativePath = first.path;
+          this.config.nativeName = first.name;
         }
         return data.engines;
       } else if (!data.available && this.config.type === 'native') {
-        // Fallback to in-browser Stockfish if native binaries cannot run on this platform
+        // Fallback to in-browser Stockfish 19 WASM if native binaries cannot run on this platform
         this.config.type = 'builtin';
-        this.config.nativeName = 'Stockfish 18 (NNUE)';
+        this.config.nativeName = 'Stockfish 19 (WASM)';
       }
     } catch {}
     return [];
@@ -334,12 +306,7 @@ class EngineManager {
       });
     }
 
-    // 3. In-Browser GOOB WebAssembly
-    if (this.config.type === 'goob-wasm') {
-      return await goobService.evaluatePosition(fen, targetDepth, options);
-    }
-
-    // 4. Built-in WebAssembly Stockfish 18 (universal fallback & default)
+    // 3. Built-in WebAssembly Stockfish 19 (universal default)
     return await stockfishService.evaluatePosition(fen, targetDepth, options);
   }
 
@@ -358,8 +325,6 @@ class EngineManager {
       this.customWorker.postMessage('stop');
       this.customWorker.postMessage('ucinewgame');
       this.customWorker.postMessage('isready');
-    } else if (this.config.type === 'goob-wasm') {
-      goobService.newGame();
     } else {
       stockfishService.newGame();
     }
@@ -374,8 +339,6 @@ class EngineManager {
       }).catch(() => {});
     } else if (this.config.type === 'custom-file') {
       this.customWorker?.postMessage('stop');
-    } else if (this.config.type === 'goob-wasm') {
-      goobService.stop();
     } else {
       stockfishService.stop();
     }
@@ -383,7 +346,6 @@ class EngineManager {
 
   public destroy() {
     stockfishService.destroy();
-    goobService.destroy();
     if (this.customWorker) {
       this.customWorker.terminate();
       this.customWorker = null;

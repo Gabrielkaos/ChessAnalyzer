@@ -19,7 +19,7 @@ export const PgnInputModal: React.FC<PgnInputModalProps> = ({
   onClose,
   onStartReview,
   isAnalyzing,
-  engineName = 'Stockfish 18 (NNUE)',
+  engineName = 'Stockfish 19 (WASM)',
   engineDepth = 18,
   onOpenEngineModal,
 }) => {

@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Chess Game Review & Accuracy Analyzer | Stockfish & GOOB Powered',
+  title: 'Chess Game Review & Accuracy Analyzer | Stockfish 19 Powered',
   description:
     'Free chess game reviewer with move classifications (Brilliant, Great, Best, Blunder), win rate momentum, and accuracy scores just like Chess.com Game Review.',
 };

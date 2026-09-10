@@ -36,7 +36,7 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
   onClose,
   onEngineChanged,
 }) => {
-  const [selectedEnginePreset, setSelectedEnginePreset] = useState<'goob-native' | 'goob-wasm' | 'stockfish' | 'custom'>('stockfish');
+  const [selectedEnginePreset, setSelectedEnginePreset] = useState<'stockfish' | 'custom'>('stockfish');
   const [activeType, setActiveType] = useState<EngineType>('builtin');
   const [nativeEngines, setNativeEngines] = useState<DiscoveredNativeEngine[]>([]);
   const [selectedNativePath, setSelectedNativePath] = useState<string>('');
@@ -65,11 +65,7 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
     setCustomFileName(currentConfig.customFileName);
     setDepth(currentConfig.depth || 18);
 
-    if (currentConfig.type === 'goob-wasm') {
-      setSelectedEnginePreset('goob-wasm');
-    } else if (currentConfig.type === 'native' && (currentConfig.nativeName?.includes('GOOB') || !currentConfig.nativeName)) {
-      setSelectedEnginePreset('goob-native');
-    } else if (currentConfig.type === 'builtin') {
+    if (currentConfig.type === 'builtin') {
       setSelectedEnginePreset('stockfish');
     } else {
       setSelectedEnginePreset('custom');
@@ -84,29 +80,18 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
     try {
       const engines = await engineManager.detectNativeEngines();
       setNativeEngines(engines);
-      if (engines.length > 0) {
-        const goob = engines.find((e) => e.name.includes('GOOB')) || engines[0];
-        if (!selectedNativePath) {
-          setSelectedNativePath(goob.path);
-          setCustomPathInput(goob.path);
-        }
+      if (engines.length > 0 && !selectedNativePath) {
+        setSelectedNativePath(engines[0].path);
+        setCustomPathInput(engines[0].path);
       }
     } finally {
       setScanning(false);
     }
   };
 
-  const handleSelectPreset = (preset: 'goob-native' | 'goob-wasm' | 'stockfish') => {
+  const handleSelectPreset = (preset: 'stockfish' | 'custom') => {
     setSelectedEnginePreset(preset);
-    if (preset === 'goob-wasm') {
-      setActiveType('goob-wasm');
-    } else if (preset === 'goob-native') {
-      setActiveType('native');
-      const optimal = nativeEngines.find((e) => e.isDefault) || nativeEngines.find((e) => e.name.includes('GOOB')) || nativeEngines[0];
-      const goobPath = optimal?.path || selectedNativePath || 'default';
-      setSelectedNativePath(goobPath);
-      setCustomPathInput(goobPath);
-    } else if (preset === 'stockfish') {
+    if (preset === 'stockfish') {
       setActiveType('builtin');
     }
   };
@@ -136,6 +121,7 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
     if (result.success) {
       setCustomFileName(result.name || file.name);
       setActiveType('custom-file');
+      setSelectedEnginePreset('custom');
       setTestResult({
         success: true,
         name: result.name || file.name,
@@ -154,27 +140,10 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
   const handleApply = () => {
     let finalConfig: EngineConfig;
 
-    if (selectedEnginePreset === 'goob-wasm') {
-      finalConfig = {
-        type: 'goob-wasm',
-        nativeName: 'GOOB 2.2 (WASM)',
-        nativePath: '',
-        customFileName: '',
-        depth,
-      };
-    } else if (selectedEnginePreset === 'goob-native') {
-      const chosen = nativeEngines.find((e) => e.path === selectedNativePath) || nativeEngines.find((e) => e.isDefault) || nativeEngines.find((e) => e.name.includes('GOOB'));
-      finalConfig = {
-        type: 'native',
-        nativeName: chosen?.name || 'GOOB 2.2-BETA',
-        nativePath: chosen?.path || customPathInput.trim() || selectedNativePath || 'default',
-        customFileName: '',
-        depth,
-      };
-    } else if (selectedEnginePreset === 'stockfish') {
+    if (selectedEnginePreset === 'stockfish') {
       finalConfig = {
         type: 'builtin',
-        nativeName: 'Stockfish 18 (NNUE)',
+        nativeName: 'Stockfish 19 (WASM)',
         nativePath: '',
         customFileName: '',
         depth,
@@ -217,7 +186,7 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
             <div>
               <h2 className="text-base sm:text-lg font-bold text-gray-100">Select Chess Engine</h2>
               <p className="text-[11px] sm:text-xs text-gray-400 line-clamp-1">
-                Stockfish 18 (NNUE), GOOB 2.2 (WASM / Native), or custom engine
+                Official Stockfish 19 (NNUE WASM) or custom engine
               </p>
             </div>
           </div>
@@ -236,12 +205,10 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
             <span className="text-gray-400">Current Active:</span>
             <span className="font-bold text-amber-300">
               {currentConfig.type === 'native'
-                ? currentConfig.nativeName || 'GOOB 2.2-BETA (Native)'
-                : currentConfig.type === 'goob-wasm'
-                ? 'GOOB 2.2 (WebAssembly)'
+                ? currentConfig.nativeName || 'Custom Native UCI'
                 : currentConfig.type === 'custom-file'
                 ? currentConfig.customFileName || 'Custom File'
-                : 'Stockfish 18 (NNUE WebAssembly)'}
+                : 'Stockfish 19 (WASM)'}
             </span>
           </div>
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#262421] text-emerald-400 border border-emerald-500/30">
@@ -256,13 +223,13 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1.5">
                 <Zap className="w-3.5 h-3.5 text-amber-400" />
-                Built-in Engines
+                Selected Engine
               </span>
-              <span className="text-[11px] text-gray-500">1-Click Fast Switch</span>
+              <span className="text-[11px] text-emerald-400 font-medium">Official In-Browser WASM</span>
             </div>
 
-            <div className={`grid grid-cols-1 ${nativeEngines.length > 0 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-3.5`}>
-              {/* 1. Stockfish 18 Card - In-Browser NNUE WASM */}
+            <div className="grid grid-cols-1 gap-3.5">
+              {/* Stockfish 19 Card - In-Browser NNUE WASM */}
               <div
                 onClick={() => handleSelectPreset('stockfish')}
                 className={`p-4 rounded-xl border-2 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between ${
@@ -272,30 +239,30 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
                 }`}
               >
                 {selectedEnginePreset === 'stockfish' && (
-                  <div className="absolute top-0 right-0 bg-emerald-500 text-black text-[9px] font-black uppercase px-2 py-0.5 rounded-bl-lg flex items-center gap-1">
+                  <div className="absolute top-0 right-0 bg-emerald-500 text-black text-[9px] font-black uppercase px-2.5 py-0.5 rounded-bl-lg flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3" />
-                    Selected
+                    Active Engine
                   </div>
                 )}
 
                 <div>
                   <div className="flex items-center gap-2.5 mb-2">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-base font-black">
+                    <div className="w-9 h-9 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-lg font-black shrink-0">
                       🐟
                     </div>
                     <div>
-                      <div className="font-bold text-sm text-white flex items-center gap-1.5">
-                        <span>Stockfish 18</span>
-                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/30">
-                          NNUE WASM
+                      <div className="font-bold text-sm text-white flex items-center gap-2">
+                        <span>Stockfish 19</span>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-500/30 font-semibold">
+                          NNUE WASM (Latest)
                         </span>
                       </div>
-                      <div className="text-[11px] text-gray-400">Embedded Neural Net</div>
+                      <div className="text-[11px] text-gray-400">Official Stockfish 19 WebAssembly Engine</div>
                     </div>
                   </div>
 
                   <p className="text-xs text-gray-300/90 leading-relaxed mb-3">
-                    Latest Stockfish 18 with embedded NNUE network. Ultra-fast pruning (~100k nodes/depth 18). Runs 100% on your device in your browser.
+                    Latest official Stockfish 19 engine with embedded SFNN neural network. Runs 100% locally on your computer in your browser at 600k+ nodes/second. Zero server delays, zero network compute, instant accurate game reviews.
                   </p>
                 </div>
 
@@ -304,144 +271,9 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
                     <Zap className="w-3 h-3" />
                     Fast Client Compute
                   </span>
-                  <span className="text-gray-400 font-mono text-[10px]">✓ In-Browser</span>
+                  <span className="text-gray-400 font-mono text-[10px]">✓ 100% In-Browser</span>
                 </div>
               </div>
-
-              {/* 2. GOOB 2.2 WASM Card - Universal In-Browser */}
-              <div
-                onClick={() => handleSelectPreset('goob-wasm')}
-                className={`p-4 rounded-xl border-2 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between ${
-                  selectedEnginePreset === 'goob-wasm'
-                    ? 'bg-amber-500/10 border-amber-500 text-amber-200 shadow-lg shadow-amber-950/20'
-                    : 'bg-[#1f1e1b] border-[#363430] text-gray-300 hover:border-gray-600 hover:bg-[#23221e]'
-                }`}
-              >
-                {selectedEnginePreset === 'goob-wasm' && (
-                  <div className="absolute top-0 right-0 bg-amber-500 text-black text-[9px] font-black uppercase px-2 py-0.5 rounded-bl-lg flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" />
-                    Selected
-                  </div>
-                )}
-
-                <div>
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 text-base font-black">
-                      🦅
-                    </div>
-                    <div>
-                      <div className="font-bold text-sm text-white flex items-center gap-1.5">
-                        <span>GOOB 2.2</span>
-                        <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded border border-amber-500/30">
-                          WASM
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-gray-400">by Gabriel Montes</div>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-gray-300/90 leading-relaxed mb-3">
-                    GOOB 2.2 compiled directly into WebAssembly. Runs 100% in-browser on client CPU without any server or backend dependencies.
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-[#363430]/60 flex items-center justify-between text-[11px]">
-                  <span className="text-amber-400 font-semibold flex items-center gap-1">
-                    <Globe className="w-3 h-3" />
-                    Universal In-Browser
-                  </span>
-                  <span className="text-gray-400 font-mono text-[10px]">✓ Zero Setup</span>
-                </div>
-              </div>
-
-              {/* 3. GOOB 2.2 Native Binary Card (Desktop / Localhost) */}
-              {nativeEngines.length > 0 && (
-                <div
-                  onClick={() => handleSelectPreset('goob-native')}
-                  className={`p-4 rounded-xl border-2 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between ${
-                    selectedEnginePreset === 'goob-native'
-                      ? 'bg-purple-500/10 border-purple-500 text-purple-200 shadow-lg shadow-purple-950/20'
-                      : 'bg-[#1f1e1b] border-[#363430] text-gray-300 hover:border-gray-600 hover:bg-[#23221e]'
-                  }`}
-                >
-                  {selectedEnginePreset === 'goob-native' && (
-                    <div className="absolute top-0 right-0 bg-purple-500 text-black text-[9px] font-black uppercase px-2 py-0.5 rounded-bl-lg flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" />
-                      Selected
-                    </div>
-                  )}
-
-                  <div>
-                    <div className="flex items-center gap-2.5 mb-2">
-                      <div className="w-8 h-8 rounded-lg bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-400 text-base font-black">
-                        ⚡
-                      </div>
-                      <div>
-                        <div className="font-bold text-sm text-white flex items-center gap-1.5">
-                          <span>GOOB 2.2</span>
-                          <span className="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.2 rounded border border-purple-500/30">
-                            Native Multi-Core
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-gray-400">Desktop C Binary</div>
-                      </div>
-                    </div>
-
-                    <p className="text-xs text-gray-300/90 leading-relaxed mb-3">
-                      Native compiled C binary with multi-threading (all CPU cores) and hardware BMI2/PEXT acceleration.
-                    </p>
-
-                    {/* Multi-tier Build Selector */}
-                    {selectedEnginePreset === 'goob-native' && nativeEngines.filter((e) => e.name.includes('GOOB')).length > 1 && (
-                      <div className="mt-2 pt-2 border-t border-purple-500/20 space-y-1.5">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-purple-300/80">
-                          CPU Architecture:
-                        </div>
-                        <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
-                          {nativeEngines
-                            .filter((e) => e.name.includes('GOOB'))
-                            .map((eng) => {
-                              const isSelected = selectedNativePath === eng.path || (!selectedNativePath && eng.isDefault);
-                              return (
-                                <div
-                                  key={eng.path}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedNativePath(eng.path);
-                                    setCustomPathInput(eng.path);
-                                  }}
-                                  className={`px-2 py-1 rounded-lg border text-[10px] cursor-pointer flex items-center justify-between transition-colors ${
-                                    isSelected
-                                      ? 'bg-purple-500/25 border-purple-400 text-white font-semibold'
-                                      : 'bg-[#181715] border-[#363430] text-gray-300 hover:border-purple-500/40'
-                                  }`}
-                                >
-                                  <div className="truncate mr-2">
-                                    <span className="font-semibold">{eng.name}</span>
-                                    <span className="text-[9px] text-gray-400 ml-1.5">{eng.features}</span>
-                                  </div>
-                                  <span className="text-[9px] text-emerald-400 shrink-0 font-mono">
-                                    {eng.isCompatible ? '✓ Ready' : '—'}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="pt-2 mt-2 border-t border-[#363430]/60 flex items-center justify-between text-[11px]">
-                    <span className="text-purple-400 font-semibold flex items-center gap-1">
-                      <Cpu className="w-3 h-3" />
-                      Host Binary
-                    </span>
-                    <span className="text-gray-400 font-mono text-[10px]">
-                      {nativeEngines.some((e) => e.isCompatible) ? '✓ Localhost Only' : 'Desktop'}
-                    </span>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -450,7 +282,7 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
               <span className="text-xs font-bold text-gray-200">Analysis Search Depth:</span>
               <span className="text-[11px] text-amber-300 font-semibold">
-                ⚡ Higher depth = More accurate analysis
+                ⚡ Higher depth = More accurate analysis (D18 recommended)
               </span>
             </div>
 
@@ -478,12 +310,6 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
                 </button>
               ))}
             </div>
-
-            {(selectedEnginePreset === 'goob-wasm' || selectedEnginePreset === 'goob-native') && depth >= 18 && (
-              <div className="text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
-                <span>💡 GOOB searches ~3M nodes/pos at D18+. For rapid game reviews under 30s, D14 or D16 is recommended.</span>
-              </div>
-            )}
           </div>
 
           {/* Section: Advanced / Custom Engine Accordion */}
@@ -529,7 +355,7 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
                         setSelectedEnginePreset('custom');
                         setActiveType('native');
                       }}
-                      placeholder="e.g. /home/gabriel/engines/stockfish or ChessAnalyzer/engines/GOOB-2.2-BETA-native"
+                      placeholder="e.g. /home/gabriel/engines/stockfish or /usr/games/stockfish"
                       className="flex-1 px-3 py-2 bg-[#141312] border border-[#363430] rounded-xl text-xs text-gray-200 font-mono focus:outline-none focus:border-amber-500"
                     />
                     <button
