@@ -47,9 +47,11 @@ export function loadGameFromPgn(pgnString: string): {
   chess: Chess;
   headers: Record<string, string>;
   rawAnnotations: Map<number, RawAnnotation>;
+  startFen: string | undefined;
 } {
   const { headers, rawMoves } = parsePgn(pgnString);
-  const chess = new Chess();
+  const startFen = headers.FEN || undefined;
+  const chess = startFen ? new Chess(startFen) : new Chess();
   const rawAnnotations = new Map<number, RawAnnotation>();
 
   for (let i = 0; i < rawMoves.length; i++) {
@@ -95,7 +97,7 @@ export function loadGameFromPgn(pgnString: string): {
     }
   }
 
-  return { chess, headers, rawAnnotations };
+  return { chess, headers, rawAnnotations, startFen };
 }
 
 /**
@@ -109,7 +111,7 @@ export async function analyzeGame(
   abortSignal?: { aborted: boolean },
   forcedEngineName?: string
 ): Promise<GameReview> {
-  const { chess, headers } = loadGameFromPgn(pgnString);
+  const { chess, headers, startFen } = loadGameFromPgn(pgnString);
   const history = chess.history({ verbose: true });
   const totalPlies = history.length;
 
@@ -545,6 +547,7 @@ export async function analyzeGame(
 
   return {
     headers,
+    startFen,
     moves,
     whiteAccuracy,
     blackAccuracy,

@@ -522,20 +522,22 @@ export default function ChessAnalyzerApp() {
   );
 
   // Get current board position FEN
+  const defaultStartFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
   const currentFen = useMemo(() => {
+    const startFen = review?.startFen || defaultStartFen;
     if (isFreePlay) {
       if (currentPly === 0 || boardMoves.length === 0) {
-        return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+        return defaultStartFen;
       }
       const m = boardMoves[currentPly - 1];
-      return m ? m.fenAfter : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      return m ? m.fenAfter : defaultStartFen;
     }
     if (customExplorationFen) return customExplorationFen;
     if (!review || review.moves.length === 0 || currentPly === 0) {
-      return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      return startFen;
     }
     const move = review.moves[currentPly - 1];
-    return move ? move.fenAfter : 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    return move ? move.fenAfter : startFen;
   }, [isFreePlay, boardMoves, review, currentPly, customExplorationFen]);
 
   const currentMove = useMemo(() => {

@@ -51,6 +51,7 @@ export interface PhaseAccuracy {
 
 export interface GameReview {
   headers: Record<string, string>;
+  startFen?: string;
   moves: MoveAnalysis[];
   whiteAccuracy: number;
   blackAccuracy: number;
