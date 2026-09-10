@@ -65,6 +65,19 @@ export default function ChessAnalyzerApp() {
   const [liveEngineEnabled, setLiveEngineEnabled] = useState<boolean>(false);
   const [filterClassification, setFilterClassification] = useState<MoveClassification | null>(null);
 
+  const currentEngineName = useMemo(() => {
+    if (engineConfig.type === 'goob-wasm') {
+      return 'GOOB 2.2 (WASM)';
+    }
+    if (engineConfig.type === 'native') {
+      return engineConfig.nativeName || 'GOOB 2.2-BETA';
+    }
+    if (engineConfig.type === 'custom-file') {
+      return engineConfig.customFileName || 'Custom Engine';
+    }
+    return 'Stockfish 18 (NNUE)';
+  }, [engineConfig]);
+
   const shortEngineLabel = useMemo(() => {
     let name = 'SF 18';
     if (engineConfig.type === 'native') {
@@ -234,7 +247,7 @@ export default function ChessAnalyzerApp() {
           bestMoveScore: score,
           bestMoveMate: mate,
           pv: '',
-          commentary: getMoveCommentary(classification, m.san, bestMoveUci, 'GOOB 2.2-BETA'),
+          commentary: getMoveCommentary(classification, m.san, bestMoveUci, currentEngineName),
           isSacrifice: false,
           gamePhase: determineGamePhase(m.before),
         };
@@ -262,6 +275,7 @@ export default function ChessAnalyzerApp() {
         openingName: openingInfo.name,
         openingEco: openingInfo.eco,
         analyzedDepth: engineConfig.depth || 18,
+        engineName: currentEngineName,
         totalMoves: Math.ceil(history.length / 2),
         result: headers.Result || '*',
         winner:
@@ -280,7 +294,7 @@ export default function ChessAnalyzerApp() {
     } catch (e) {
       console.error('Initial load failed:', e);
     }
-  }, [engineConfig.depth]);
+  }, [currentEngineName, engineConfig.depth]);
 
   useEffect(() => {
     initialLoad(currentPgn);
@@ -296,9 +310,15 @@ export default function ChessAnalyzerApp() {
 
     try {
       soundManager.play('gameStart');
-      const analyzedReview = await analyzeGame(pgnString, targetDepth, (prog) => {
-        setProgress(prog);
-      });
+      const analyzedReview = await analyzeGame(
+        pgnString,
+        targetDepth,
+        (prog) => {
+          setProgress(prog);
+        },
+        undefined,
+        currentEngineName
+      );
 
       setReview(analyzedReview);
       setCurrentPly(analyzedReview.moves.length > 0 ? 1 : 0);
@@ -700,7 +720,7 @@ export default function ChessAnalyzerApp() {
           </span>
         </div>
         <div className="text-[11px] text-amber-300 font-bold px-2 py-0.5 bg-amber-950/40 border border-amber-800/40 rounded truncate max-w-[170px]">
-          {engineConfig.nativeName || 'Stockfish 18'} (D{engineConfig.depth || 18})
+          {currentEngineName} (D{engineConfig.depth || 18})
         </div>
       </div>
 
@@ -743,7 +763,7 @@ export default function ChessAnalyzerApp() {
         onClick={handleRunReviewClick}
         disabled={boardMoves.length === 0 || isAnalyzing}
         className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-950/40 transition-all hover:scale-[1.02]"
-        title={`Run Game Review with ${engineConfig.nativeName || 'Stockfish 18'} at Depth ${engineConfig.depth || 18}`}
+        title={`Run Game Review with ${currentEngineName} at Depth ${engineConfig.depth || 18}`}
       >
         <Sparkles className="w-4 h-4 fill-white" />
         <span>{isAnalyzing ? `Analyzing (D${engineConfig.depth || 18})...` : `Run Game Review (D${engineConfig.depth || 18}) on These Moves`}</span>
@@ -823,7 +843,7 @@ export default function ChessAnalyzerApp() {
             onClick={handleRunReviewClick}
             disabled={isAnalyzing || (isFreePlay && boardMoves.length === 0)}
             className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-950/40 transition-all hover:scale-105 shrink-0"
-            title={`Run full game review with ${engineConfig.nativeName || 'Stockfish 18'} at Depth ${engineConfig.depth || 18}`}
+            title={`Run full game review with ${currentEngineName} at Depth ${engineConfig.depth || 18}`}
           >
             <Sparkles className="w-3.5 h-3.5 fill-white shrink-0" />
             <span className="hidden sm:inline">{isAnalyzing ? `Analyzing (D${engineConfig.depth || 18})...` : `Run Game Review (D${engineConfig.depth || 18})`}</span>
@@ -933,13 +953,7 @@ export default function ChessAnalyzerApp() {
                   setIsAnalyzing(false);
                   setProgress(null);
                 }}
-                engineName={
-                  engineConfig.type === 'native'
-                    ? engineConfig.nativeName || 'GOOB 2.2-BETA'
-                    : engineConfig.type === 'custom-file'
-                    ? engineConfig.customFileName || 'Custom File'
-                    : 'Stockfish 18 (NNUE)'
-                }
+                engineName={currentEngineName}
                 depth={engineConfig.depth || 18}
               />
             )}
@@ -947,14 +961,7 @@ export default function ChessAnalyzerApp() {
             {/* Move Coach Card: Right below controls on mobile so coach advice is immediately visible */}
             <MoveCoachCard
               move={currentMove}
-              engineName={
-                review?.engineName ||
-                (engineConfig.type === 'native'
-                  ? engineConfig.nativeName || 'GOOB 2.2-BETA'
-                  : engineConfig.type === 'custom-file'
-                  ? engineConfig.customFileName || 'Custom File'
-                  : 'Stockfish 18 (NNUE)')
-              }
+              engineName={review?.engineName || currentEngineName}
             />
 
             {/* Mobile Tab Switcher */}
@@ -1084,13 +1091,7 @@ export default function ChessAnalyzerApp() {
                 setIsAnalyzing(false);
                 setProgress(null);
               }}
-              engineName={
-                engineConfig.type === 'native'
-                  ? engineConfig.nativeName || 'GOOB 2.2-BETA'
-                  : engineConfig.type === 'custom-file'
-                  ? engineConfig.customFileName || 'Custom File'
-                  : 'Stockfish 18 (NNUE)'
-              }
+              engineName={currentEngineName}
               depth={engineConfig.depth || 18}
             />
           )}
@@ -1115,14 +1116,7 @@ export default function ChessAnalyzerApp() {
           {/* Move Coach Card */}
           <MoveCoachCard
             move={currentMove}
-            engineName={
-              review?.engineName ||
-              (engineConfig.type === 'native'
-                ? engineConfig.nativeName || 'GOOB 2.2-BETA'
-                : engineConfig.type === 'custom-file'
-                ? engineConfig.customFileName || 'Custom File'
-                : 'Stockfish 18 (NNUE)')
-            }
+            engineName={review?.engineName || currentEngineName}
           />
 
           {/* Classification Breakdown Table */}
@@ -1156,15 +1150,7 @@ export default function ChessAnalyzerApp() {
         onClose={() => setIsModalOpen(false)}
         onStartReview={handleStartReview}
         isAnalyzing={isAnalyzing}
-        engineName={
-          engineConfig.type === 'native'
-            ? engineConfig.nativeName || 'GOOB 2.2-BETA'
-            : engineConfig.type === 'custom-file'
-            ? engineConfig.customFileName || 'Custom File'
-            : engineConfig.type === 'goob-wasm'
-            ? 'GOOB 2.2 (WASM)'
-            : 'Stockfish 18 (NNUE)'
-        }
+        engineName={currentEngineName}
         engineDepth={engineConfig.depth || 18}
         onOpenEngineModal={() => setIsEngineModalOpen(true)}
       />
@@ -1175,17 +1161,15 @@ export default function ChessAnalyzerApp() {
         onClose={() => setIsEngineModalOpen(false)}
         onEngineChanged={(newConfig) => {
           setEngineConfig(newConfig);
-          showToast(
-            `Engine switched to: ${
-              newConfig.type === 'native'
-                ? newConfig.nativeName
-                : newConfig.type === 'custom-file'
-                ? newConfig.customFileName
-                : newConfig.type === 'goob-wasm'
-                ? 'GOOB 2.2 (WASM)'
-                : 'Stockfish 18 (NNUE)'
-            } (Depth ${newConfig.depth || 18})`
-          );
+          const name =
+            newConfig.type === 'native'
+              ? newConfig.nativeName || 'GOOB 2.2-BETA'
+              : newConfig.type === 'custom-file'
+              ? newConfig.customFileName || 'Custom Engine'
+              : newConfig.type === 'goob-wasm'
+              ? 'GOOB 2.2 (WASM)'
+              : 'Stockfish 18 (NNUE)';
+          showToast(`Engine switched to: ${name} (Depth ${newConfig.depth || 18})`);
         }}
       />
 

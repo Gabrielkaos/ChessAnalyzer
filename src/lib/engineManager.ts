@@ -93,21 +93,21 @@ class EngineManager {
     this.setConfig({
       type: 'builtin',
       nativeName: 'Stockfish 18 (NNUE)',
-      depth: depth ?? this.config.depth ?? 20,
+      depth: depth ?? this.config.depth ?? 18,
     });
   }
 
   public getActiveEngineName(): string {
-    if (this.config.type === 'native') {
-      return this.config.nativeName || 'GOOB 2.2-BETA';
-    }
     if (this.config.type === 'goob-wasm') {
       return 'GOOB 2.2 (WASM)';
+    }
+    if (this.config.type === 'native') {
+      return this.config.nativeName || 'GOOB 2.2-BETA';
     }
     if (this.config.type === 'custom-file') {
       return this.config.customFileName || 'Custom Engine';
     }
-    return 'Stockfish 18';
+    return 'Stockfish 18 (NNUE)';
   }
 
   public getConfig(): EngineConfig {

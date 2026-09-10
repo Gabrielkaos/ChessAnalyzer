@@ -103,9 +103,10 @@ export function loadGameFromPgn(pgnString: string): {
  */
 export async function analyzeGame(
   pgnString: string,
-  analysisDepth: number = 20,
+  analysisDepth: number = 18,
   onProgress?: ProgressCallback,
-  abortSignal?: { aborted: boolean }
+  abortSignal?: { aborted: boolean },
+  forcedEngineName?: string
 ): Promise<GameReview> {
   const { chess, headers } = loadGameFromPgn(pgnString);
   const history = chess.history({ verbose: true });
@@ -126,7 +127,7 @@ export async function analyzeGame(
   }
 
   const totalPositions = positions.length;
-  const activeEngineName = engineManager.getActiveEngineName();
+  const activeEngineName = forcedEngineName || engineManager.getActiveEngineName();
 
   // Data structures matching Analyzer.py
   let alreadyWentEndgame = false;
