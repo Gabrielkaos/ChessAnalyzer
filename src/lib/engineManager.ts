@@ -1,7 +1,8 @@
 import { EngineEvaluation } from '@/types/chess';
 import { stockfishService } from './stockfishService';
+import { goobService } from './goobService';
 
-export type EngineType = 'native' | 'builtin' | 'custom-file';
+export type EngineType = 'native' | 'builtin' | 'goob-wasm' | 'custom-file';
 
 export interface DiscoveredNativeEngine {
   id: string;
@@ -80,6 +81,14 @@ class EngineManager {
     });
   }
 
+  public selectGoobWasm(depth?: number) {
+    this.setConfig({
+      type: 'goob-wasm',
+      nativeName: 'GOOB 2.2 (WASM)',
+      depth: depth ?? this.config.depth ?? 18,
+    });
+  }
+
   public selectStockfish(depth?: number) {
     this.setConfig({
       type: 'builtin',
@@ -91,6 +100,9 @@ class EngineManager {
   public getActiveEngineName(): string {
     if (this.config.type === 'native') {
       return this.config.nativeName || 'GOOB 2.2-BETA';
+    }
+    if (this.config.type === 'goob-wasm') {
+      return 'GOOB 2.2 (WASM)';
     }
     if (this.config.type === 'custom-file') {
       return this.config.customFileName || 'Custom Engine';
@@ -322,8 +334,13 @@ class EngineManager {
       });
     }
 
-    // 3. Built-in WebAssembly Stockfish (universal fallback & default)
-    return stockfishService.evaluatePosition(fen, targetDepth, options);
+    // 3. In-Browser GOOB WebAssembly
+    if (this.config.type === 'goob-wasm') {
+      return await goobService.evaluatePosition(fen, targetDepth, options);
+    }
+
+    // 4. Built-in WebAssembly Stockfish 18 (universal fallback & default)
+    return await stockfishService.evaluatePosition(fen, targetDepth, options);
   }
 
   public async newGame() {
@@ -341,6 +358,8 @@ class EngineManager {
       this.customWorker.postMessage('stop');
       this.customWorker.postMessage('ucinewgame');
       this.customWorker.postMessage('isready');
+    } else if (this.config.type === 'goob-wasm') {
+      goobService.newGame();
     } else {
       stockfishService.newGame();
     }
@@ -355,8 +374,19 @@ class EngineManager {
       }).catch(() => {});
     } else if (this.config.type === 'custom-file') {
       this.customWorker?.postMessage('stop');
+    } else if (this.config.type === 'goob-wasm') {
+      goobService.stop();
     } else {
       stockfishService.stop();
+    }
+  }
+
+  public destroy() {
+    stockfishService.destroy();
+    goobService.destroy();
+    if (this.customWorker) {
+      this.customWorker.terminate();
+      this.customWorker = null;
     }
   }
 }
