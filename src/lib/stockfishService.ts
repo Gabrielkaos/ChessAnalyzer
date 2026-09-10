@@ -23,10 +23,7 @@ export class StockfishService {
           typeof WebAssembly === 'object' &&
           WebAssembly.validate(Uint8Array.of(0x0, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00));
 
-        const scriptUrl = wasmSupported
-          ? '/stockfish/stockfish.wasm.js'
-          : '/stockfish/stockfish.js';
-
+        const scriptUrl = '/stockfish/stockfish.js';
         this.worker = new Worker(scriptUrl);
 
         this.worker.onmessage = (event: MessageEvent) => {
@@ -34,17 +31,7 @@ export class StockfishService {
         };
 
         this.worker.onerror = (err) => {
-          console.warn('Stockfish Worker error, falling back to JS worker:', err);
-          if (wasmSupported) {
-            try {
-              this.worker?.terminate();
-              this.worker = new Worker('/stockfish/stockfish.js');
-              this.worker.onmessage = (e) => this.handleMessage(String(e.data));
-              this.worker.postMessage('uci');
-            } catch (fallbackErr) {
-              console.error('Failed to init fallback stockfish:', fallbackErr);
-            }
-          }
+          console.warn('Stockfish 18 Worker error:', err);
         };
 
         // Wait for readyok or uciok

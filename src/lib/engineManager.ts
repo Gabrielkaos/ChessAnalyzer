@@ -27,7 +27,7 @@ class EngineManager {
   private config: EngineConfig = {
     type: 'builtin',
     nativePath: '',
-    nativeName: 'Stockfish 10',
+    nativeName: 'Stockfish 18 (NNUE)',
     customFileName: '',
     depth: 18,
   };
@@ -52,11 +52,11 @@ class EngineManager {
       }
 
       // If running on Vercel or remote web:
-      // Default to In-Browser Web Worker (Stockfish WASM) so that 100% of the game review
+      // Default to In-Browser Web Worker (Stockfish 18 WASM) so that 100% of the game review
       // runs on the user's local machine CPU with ZERO network latency!
       if (!isLocalhost && (!saved || this.config.type === 'native')) {
         this.config.type = 'builtin';
-        this.config.nativeName = 'Stockfish 10';
+        this.config.nativeName = 'Stockfish 18 (NNUE)';
         if (!this.config.depth || this.config.depth > 20) this.config.depth = 18;
       }
 
@@ -83,7 +83,7 @@ class EngineManager {
   public selectStockfish(depth?: number) {
     this.setConfig({
       type: 'builtin',
-      nativeName: 'Stockfish 10',
+      nativeName: 'Stockfish 18 (NNUE)',
       depth: depth ?? this.config.depth ?? 20,
     });
   }
@@ -95,7 +95,7 @@ class EngineManager {
     if (this.config.type === 'custom-file') {
       return this.config.customFileName || 'Custom Engine';
     }
-    return 'Stockfish 10';
+    return 'Stockfish 18';
   }
 
   public getConfig(): EngineConfig {
@@ -125,7 +125,7 @@ class EngineManager {
       } else if (!data.available && this.config.type === 'native') {
         // Fallback to in-browser Stockfish if native binaries cannot run on this platform
         this.config.type = 'builtin';
-        this.config.nativeName = 'Stockfish 10';
+        this.config.nativeName = 'Stockfish 18 (NNUE)';
       }
     } catch {}
     return [];

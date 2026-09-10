@@ -205,7 +205,7 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
             <div>
               <h2 className="text-lg font-bold text-gray-100">Select Chess Engine</h2>
               <p className="text-xs text-gray-400">
-                Choose between built-in GOOB 2.2-BETA, Stockfish 10, or a custom engine
+                Choose between built-in Stockfish 18 (NNUE), GOOB 2.2-BETA, or a custom engine
               </p>
             </div>
           </div>
@@ -227,11 +227,11 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
                 ? currentConfig.nativeName || 'GOOB 2.2-BETA'
                 : currentConfig.type === 'custom-file'
                 ? currentConfig.customFileName || 'Custom File'
-                : 'Stockfish 10 (WebAssembly)'}
+                : 'Stockfish 18 (NNUE WebAssembly)'}
             </span>
           </div>
           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#262421] text-emerald-400 border border-emerald-500/30">
-            DEPTH {currentConfig.depth || 20}
+            DEPTH {currentConfig.depth || 18}
           </span>
         </div>
 
@@ -248,7 +248,7 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {/* 1. Stockfish 10 Card - Local Compute */}
+              {/* 1. Stockfish 18 Card - Local Compute */}
               <div
                 onClick={() => handleSelectPreset('stockfish')}
                 className={`p-4 rounded-xl border-2 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between ${
@@ -271,26 +271,26 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
                     </div>
                     <div>
                       <div className="font-bold text-sm text-white flex items-center gap-1.5">
-                        <span>Stockfish 10</span>
+                        <span>Stockfish 18</span>
                         <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/30">
-                          WASM
+                          NNUE WASM
                         </span>
                       </div>
-                      <div className="text-[11px] text-gray-400">Local Machine Compute</div>
+                      <div className="text-[11px] text-gray-400">Latest Build (Embedded NNUE)</div>
                     </div>
                   </div>
 
                   <p className="text-xs text-gray-300/90 leading-relaxed mb-3">
-                    Runs 100% on your device&apos;s CPU inside your browser using Web Workers. Zero server latency, instant evaluation, works anywhere.
+                    Latest official Stockfish 18 with embedded NNUE neural network. Ultra-fast alpha-beta pruning (~100k nodes/depth 18). Runs 100% on your device&apos;s CPU in your browser.
                   </p>
                 </div>
 
                 <div className="pt-2 border-t border-[#363430]/60 flex items-center justify-between text-[11px]">
                   <span className="text-emerald-400 font-semibold flex items-center gap-1">
                     <Zap className="w-3 h-3" />
-                    Recommended for Web
+                    Lightning Fast Review
                   </span>
-                  <span className="text-gray-400 font-mono text-[10px]">✓ Your Local CPU</span>
+                  <span className="text-gray-400 font-mono text-[10px]">✓ Embedded NNUE</span>
                 </div>
               </div>
 
@@ -401,10 +401,10 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
 
             <div className="grid grid-cols-4 gap-2">
               {[
-                { depth: 18, label: 'D18', desc: 'Fast' },
-                { depth: 20, label: 'D20', desc: 'Balanced' },
-                { depth: 22, label: 'D22', desc: 'Deep' },
-                { depth: 26, label: 'D26', desc: 'Master' },
+                { depth: 14, label: 'D14', desc: 'Fast' },
+                { depth: 16, label: 'D16', desc: 'Balanced' },
+                { depth: 18, label: 'D18', desc: 'Deep' },
+                { depth: 20, label: 'D20', desc: 'Master' },
               ].map((item) => (
                 <button
                   key={item.depth}
@@ -421,6 +421,12 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
                 </button>
               ))}
             </div>
+
+            {selectedEnginePreset === 'goob' && depth >= 18 && (
+              <div className="text-[11px] text-amber-300/90 bg-amber-500/10 border border-amber-500/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                <span>💡 GOOB searches ~3M nodes/pos at D18+. For rapid game reviews under 30s, D14 or D16 is recommended.</span>
+              </div>
+            )}
           </div>
 
           {/* Section: Advanced / Custom Engine Accordion */}

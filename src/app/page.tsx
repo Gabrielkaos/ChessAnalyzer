@@ -704,7 +704,7 @@ export default function ChessAnalyzerApp() {
                 ? engineConfig.nativeName || 'Local Native UCI'
                 : engineConfig.type === 'custom-file'
                 ? engineConfig.customFileName || 'Custom File'
-                : 'Stockfish 10 (WASM)'}
+                : 'Stockfish 18 (NNUE)'}
             </span>
           </button>
 
@@ -854,7 +854,7 @@ export default function ChessAnalyzerApp() {
                   ? engineConfig.nativeName || 'GOOB 2.2-BETA'
                   : engineConfig.type === 'custom-file'
                   ? engineConfig.customFileName || 'Custom File'
-                  : 'Stockfish 10'
+                  : 'Stockfish 18 (NNUE)'
               }
               depth={engineConfig.depth || 20}
             />
@@ -947,7 +947,7 @@ export default function ChessAnalyzerApp() {
                 ? engineConfig.nativeName || 'GOOB 2.2-BETA'
                 : engineConfig.type === 'custom-file'
                 ? engineConfig.customFileName || 'Custom File'
-                : 'Stockfish 10')
+                : 'Stockfish 18 (NNUE)')
             }
           />
 
@@ -996,7 +996,7 @@ export default function ChessAnalyzerApp() {
                 ? newConfig.nativeName
                 : newConfig.type === 'custom-file'
                 ? newConfig.customFileName
-                : 'Stockfish 10 (WASM)'
+                : 'Stockfish 18 (NNUE)'
             }`
           );
         }}

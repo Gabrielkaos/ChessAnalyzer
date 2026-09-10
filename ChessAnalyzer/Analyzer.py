@@ -122,6 +122,8 @@ def get_eval(pos, the_engine, depth_limit):
 
 def init_engine(the_engine):
     command(the_engine, 'uci')
+    command(the_engine, 'setoption name Threads value 4')
+    command(the_engine, 'setoption name Hash value 256')
     command(the_engine, 'ucinewgame')
     command(the_engine, 'isready')
     command(the_engine, '')
@@ -414,6 +416,8 @@ class LiveAnalyzer:
         self.lock = threading.Lock()
         
         self._send_command('uci')
+        self._send_command('setoption name Threads value 4')
+        self._send_command('setoption name Hash value 256')
         self._send_command('isready')
         
         self.reader_thread = threading.Thread(target=self._read_output, daemon=True)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { spawn, spawnSync, ChildProcess } from 'child_process';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
 export const dynamic = 'force-dynamic';
 
@@ -310,7 +311,8 @@ function getOrSpawnEngine(enginePath: string): ChildProcess {
 
   const proc = spawn(resolved, [], { stdio: ['pipe', 'pipe', 'pipe'] });
   proc.stdout?.setEncoding('utf8');
-  proc.stdin?.write('uci\nisready\nucinewgame\n');
+  const threadCount = Math.max(1, Math.min(os.cpus()?.length || 4, 6));
+  proc.stdin?.write(`uci\nsetoption name Threads value ${threadCount}\nsetoption name Hash value 256\nisready\nucinewgame\n`);
 
   activeProcess = proc;
   activeEnginePath = resolved;
@@ -341,7 +343,7 @@ export async function GET() {
       optimalEngine: defaultEng || null,
       message:
         isWindows && compatibleEngines.length === 0
-          ? 'Running on Windows: Native Linux ELF binaries cannot run natively. WebAssembly Stockfish 10 is automatically active for in-browser local compute. You can also place a Windows UCI .exe in ChessAnalyzer/engines/.'
+          ? 'Running on Windows: Native Linux ELF binaries cannot run natively. WebAssembly Stockfish 18 is automatically active for in-browser local compute. You can also place a Windows UCI .exe in ChessAnalyzer/engines/.'
           : undefined,
     });
   } catch (error: unknown) {
