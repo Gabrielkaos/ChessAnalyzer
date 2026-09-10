@@ -83,7 +83,7 @@ const CLASSIFICATION_CONFIG: Record<
     bg: 'bg-red-500/20 text-red-400',
     text: 'text-red-400',
     border: 'border-red-500/40',
-    iconSrc: '/badges/mistake.png',
+    iconSrc: '/badges/miss.png',
   },
   blunder: {
     label: 'Blunder',

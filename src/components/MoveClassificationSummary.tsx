@@ -19,7 +19,7 @@ const CATEGORIES: { key: MoveClassification; label: string; icon: string }[] = [
   { key: 'book', label: 'Book', icon: '/badges/book.png' },
   { key: 'inaccuracy', label: 'Inaccuracies', icon: '/badges/inaccuracy.png' },
   { key: 'mistake', label: 'Mistakes', icon: '/badges/mistake.png' },
-  { key: 'miss', label: 'Misses', icon: '/badges/mistake.png' },
+  { key: 'miss', label: 'Misses', icon: '/badges/miss.png' },
   { key: 'blunder', label: 'Blunders', icon: '/badges/blunder.png' },
 ];
 
