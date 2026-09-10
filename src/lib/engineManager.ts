@@ -21,11 +21,11 @@ export interface EngineConfig {
 
 class EngineManager {
   private config: EngineConfig = {
-    type: 'native',
-    nativePath: 'ChessAnalyzer/engines/GOOB-2.2-BETA-native',
-    nativeName: 'GOOB 2.2-BETA',
+    type: 'builtin',
+    nativePath: '',
+    nativeName: 'Stockfish 10',
     customFileName: '',
-    depth: 20,
+    depth: 18,
   };
 
   private customWorker: Worker | null = null;
@@ -34,13 +34,36 @@ class EngineManager {
 
   constructor() {
     if (typeof window !== 'undefined') {
+      const isLocalhost =
+        window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.hostname === '0.0.0.0';
+
       const saved = localStorage.getItem('chess_engine_config');
       if (saved) {
         try {
-          this.config = { ...this.config, ...JSON.parse(saved) };
+          const parsed = JSON.parse(saved);
+          this.config = { ...this.config, ...parsed };
         } catch {}
       }
-      this.detectNativeEngines();
+
+      // If running on Vercel or remote web:
+      // Default to In-Browser Web Worker (Stockfish WASM) so that 100% of the game review
+      // runs on the user's local machine CPU with ZERO network latency!
+      if (!isLocalhost && (!saved || this.config.type === 'native')) {
+        this.config.type = 'builtin';
+        this.config.nativeName = 'Stockfish 10';
+        if (!this.config.depth || this.config.depth > 20) this.config.depth = 18;
+      }
+
+      if (isLocalhost) {
+        if (!saved) {
+          this.config.type = 'native';
+          this.config.nativeName = 'GOOB 2.2-BETA';
+          this.config.nativePath = 'ChessAnalyzer/engines/GOOB-2.2-BETA-native';
+        }
+        this.detectNativeEngines();
+      }
     }
   }
 

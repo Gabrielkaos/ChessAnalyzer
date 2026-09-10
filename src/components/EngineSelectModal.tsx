@@ -248,7 +248,53 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-              {/* 1. GOOB 2.2-BETA Card */}
+              {/* 1. Stockfish 10 Card - Local Compute */}
+              <div
+                onClick={() => handleSelectPreset('stockfish')}
+                className={`p-4 rounded-xl border-2 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between ${
+                  selectedEnginePreset === 'stockfish'
+                    ? 'bg-emerald-500/10 border-emerald-500 text-emerald-200 shadow-lg shadow-emerald-950/20'
+                    : 'bg-[#1f1e1b] border-[#363430] text-gray-300 hover:border-gray-600 hover:bg-[#23221e]'
+                }`}
+              >
+                {selectedEnginePreset === 'stockfish' && (
+                  <div className="absolute top-0 right-0 bg-emerald-500 text-black text-[9px] font-black uppercase px-2 py-0.5 rounded-bl-lg flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Selected
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center gap-2.5 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-base font-black">
+                      🐟
+                    </div>
+                    <div>
+                      <div className="font-bold text-sm text-white flex items-center gap-1.5">
+                        <span>Stockfish 10</span>
+                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/30">
+                          WASM
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-gray-400">Local Machine Compute</div>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-gray-300/90 leading-relaxed mb-3">
+                    Runs 100% on your device&apos;s CPU inside your browser using Web Workers. Zero server latency, instant evaluation, works anywhere.
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-[#363430]/60 flex items-center justify-between text-[11px]">
+                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                    <Zap className="w-3 h-3" />
+                    Recommended for Web
+                  </span>
+                  <span className="text-gray-400 font-mono text-[10px]">✓ Your Local CPU</span>
+                </div>
+              </div>
+
+              {/* 2. GOOB 2.2-BETA Card */}
               <div
                 onClick={() => handleSelectPreset('goob')}
                 className={`p-4 rounded-xl border-2 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between ${
@@ -281,64 +327,18 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
                   </div>
 
                   <p className="text-xs text-gray-300/90 leading-relaxed mb-3">
-                    Custom native UCI engine tuned for aggressive piece coordination, King safety pressure, and fast tactical analysis.
+                    Custom native UCI binary in C with aggressive tactical heuristics. Best when running locally via <code>npm run dev</code> on your PC.
                   </p>
                 </div>
 
                 <div className="pt-2 border-t border-[#363430]/60 flex items-center justify-between text-[11px]">
                   <span className="text-amber-400 font-semibold flex items-center gap-1">
                     <Award className="w-3 h-3" />
-                    Featured
+                    Local PC / Desktop
                   </span>
                   <span className="text-gray-400 font-mono text-[10px]">
-                    {nativeEngines.some((e) => e.name.includes('GOOB')) ? '✓ Native Ready' : 'Bundled'}
+                    {nativeEngines.some((e) => e.name.includes('GOOB')) ? '✓ Native Ready' : 'Bundled Binary'}
                   </span>
-                </div>
-              </div>
-
-              {/* 2. Stockfish 10 Card */}
-              <div
-                onClick={() => handleSelectPreset('stockfish')}
-                className={`p-4 rounded-xl border-2 cursor-pointer transition-all relative overflow-hidden flex flex-col justify-between ${
-                  selectedEnginePreset === 'stockfish'
-                    ? 'bg-emerald-500/10 border-emerald-500 text-emerald-200 shadow-lg shadow-emerald-950/20'
-                    : 'bg-[#1f1e1b] border-[#363430] text-gray-300 hover:border-gray-600 hover:bg-[#23221e]'
-                }`}
-              >
-                {selectedEnginePreset === 'stockfish' && (
-                  <div className="absolute top-0 right-0 bg-emerald-500 text-black text-[9px] font-black uppercase px-2 py-0.5 rounded-bl-lg flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" />
-                    Selected
-                  </div>
-                )}
-
-                <div>
-                  <div className="flex items-center gap-2.5 mb-2">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 text-base font-black">
-                      🐟
-                    </div>
-                    <div>
-                      <div className="font-bold text-sm text-white flex items-center gap-1.5">
-                        <span>Stockfish 10</span>
-                        <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.2 rounded border border-emerald-500/30">
-                          WASM
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-gray-400">by Stockfish Authors</div>
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-gray-300/90 leading-relaxed mb-3">
-                    Universal grandmaster-level chess engine running inside your browser via multi-threaded WebAssembly.
-                  </p>
-                </div>
-
-                <div className="pt-2 border-t border-[#363430]/60 flex items-center justify-between text-[11px]">
-                  <span className="text-emerald-400 font-semibold flex items-center gap-1">
-                    <Globe className="w-3 h-3" />
-                    In-Browser
-                  </span>
-                  <span className="text-gray-400 font-mono text-[10px]">✓ Zero Install</span>
                 </div>
               </div>
             </div>
