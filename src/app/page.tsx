@@ -20,7 +20,7 @@ import { analyzeGame, ReviewProgress, loadGameFromPgn } from '@/lib/gameReviewer
 import { engineManager, EngineConfig } from '@/lib/engineManager';
 import { soundManager } from '@/lib/sounds';
 import { GameReview, MoveClassification, MoveAnalysis } from '@/types/chess';
-import { Sparkles, Play, CheckCircle2, RotateCcw, Cpu, PlusCircle } from 'lucide-react';
+import { Sparkles, Play, CheckCircle2, RotateCcw, Cpu, PlusCircle, FileText } from 'lucide-react';
 
 export interface BoardMoveRecord {
   ply: number;
@@ -51,6 +51,7 @@ export default function ChessAnalyzerApp() {
   // Live interactive board mode states
   const [isFreePlay, setIsFreePlay] = useState<boolean>(false);
   const [boardMoves, setBoardMoves] = useState<BoardMoveRecord[]>([]);
+  const [mobileTab, setMobileTab] = useState<'review' | 'moves' | 'chart'>('review');
 
   // Engine & evaluation state
   const [engineConfig, setEngineConfig] = useState<EngineConfig>({
@@ -63,6 +64,19 @@ export default function ChessAnalyzerApp() {
   const [liveEval, setLiveEval] = useState<{ score: number; mate: number | null; bestMove?: string } | null>(null);
   const [liveEngineEnabled, setLiveEngineEnabled] = useState<boolean>(false);
   const [filterClassification, setFilterClassification] = useState<MoveClassification | null>(null);
+
+  const shortEngineLabel = useMemo(() => {
+    if (engineConfig.type === 'native') {
+      return engineConfig.nativeName?.replace('-BETA', '') || 'GOOB';
+    }
+    if (engineConfig.type === 'goob-wasm') {
+      return 'GOOB WASM';
+    }
+    if (engineConfig.type === 'custom-file') {
+      return engineConfig.customFileName || 'Custom';
+    }
+    return 'SF 18';
+  }, [engineConfig]);
 
   // Auto-toast helper
   const showToast = (msg: string) => {
@@ -674,86 +688,157 @@ export default function ChessAnalyzerApp() {
     });
   };
 
-  return (
-    <div className="min-h-screen bg-[#161512] text-gray-100 flex flex-col font-sans">
-      {/* Top Navigation Bar */}
-      <header className="w-full bg-[#1f1e1b] border-b border-[#2d2b27] px-4 py-3 flex flex-wrap items-center justify-between gap-3 shadow-lg">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-black text-white text-lg shadow-md shadow-emerald-950/50">
-            ♟
-          </div>
-          <div>
-            <h1 className="text-sm font-black tracking-wide text-gray-100">
-              Chess Analyzer <span className="text-emerald-400 font-bold text-xs uppercase px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/40">Game Review</span>
-            </h1>
-            <p className="text-[11px] text-gray-400">UCI Engine Accuracy & Move Classification</p>
+  const renderLiveBoardCard = () => (
+    <div className="w-full bg-[#262421] border border-emerald-500/40 rounded-xl p-3 sm:p-4 shadow-xl select-none">
+      <div className="flex items-center justify-between mb-3 border-b border-[#363430] pb-2.5">
+        <div className="flex items-center gap-2">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
+            Live Board (Interactive)
+          </span>
+        </div>
+        <div className="text-[11px] text-amber-300 font-bold px-2 py-0.5 bg-amber-950/40 border border-amber-800/40 rounded truncate max-w-[150px]">
+          {engineConfig.nativeName || 'GOOB 2.2-BETA'} (D{engineConfig.depth || 20})
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <div className="bg-[#1f1e1b] border border-[#363430] rounded-lg p-2.5">
+          <div className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Live Evaluation</div>
+          <div className="text-base font-black text-gray-100">
+            {liveEval
+              ? liveEval.mate !== null
+                ? liveEval.mate > 0
+                  ? `M${liveEval.mate}`
+                  : `-M${Math.abs(liveEval.mate)}`
+                : Math.abs(liveEval.score) < 5
+                ? '0.0'
+                : liveEval.score > 0
+                ? `+${(liveEval.score / 100).toFixed(1)}`
+                : `${(liveEval.score / 100).toFixed(1)}`
+              : '0.0'}
           </div>
         </div>
 
-        <div className="flex items-center flex-wrap gap-2">
+        <div className="bg-[#1f1e1b] border border-[#363430] rounded-lg p-2.5">
+          <div className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Engine Best Move</div>
+          <div className="text-base font-black text-emerald-400 truncate">
+            {liveEval?.bestMove || (liveEngineEnabled ? 'Calculating...' : 'Enable Live Engine')}
+          </div>
+        </div>
+      </div>
+
+      <div className="text-xs text-gray-300 mb-3 flex items-center justify-between">
+        <span>
+          Moves played: <strong className="text-white">{boardMoves.length}</strong>
+        </span>
+        <span className="text-gray-400">
+          Turn: <strong className="text-white">{currentFen.split(' ')[1] === 'w' ? 'White' : 'Black'}</strong>
+        </span>
+      </div>
+
+      <button
+        onClick={handleRunReviewClick}
+        disabled={boardMoves.length === 0 || isAnalyzing}
+        className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-950/40 transition-all hover:scale-[1.02]"
+      >
+        <Sparkles className="w-4 h-4 fill-white" />
+        <span>{isAnalyzing ? 'Analyzing...' : 'Run Game Review on These Moves'}</span>
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-[#161512] text-gray-100 flex flex-col font-sans">
+      {/* Top Navigation Bar */}
+      <header className="w-full bg-[#1f1e1b] border-b border-[#2d2b27] px-2.5 sm:px-4 py-2 sm:py-3 flex flex-wrap items-center justify-between gap-2 shadow-lg">
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center font-black text-white text-base sm:text-lg shadow-md shadow-emerald-950/50 shrink-0">
+            ♟
+          </div>
+          <div>
+            <h1 className="text-xs sm:text-sm font-black tracking-wide text-gray-100 flex items-center gap-1.5">
+              <span>Chess Analyzer</span>
+              <span className="text-emerald-400 font-bold text-[9px] sm:text-xs uppercase px-1.5 py-0.5 rounded bg-emerald-950/60 border border-emerald-800/40">
+                Review
+              </span>
+            </h1>
+            <p className="text-[10px] sm:text-[11px] text-gray-400 hidden sm:block">
+              UCI Engine Accuracy & Move Classification
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center flex-wrap gap-1.5 sm:gap-2">
           {/* Active Engine Selector Button */}
           <button
             onClick={() => setIsEngineModalOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-[#2a2825] hover:bg-[#363430] border border-[#3b3834] rounded-xl text-xs font-semibold text-gray-200 transition-colors shadow-sm"
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[#2a2825] hover:bg-[#363430] border border-[#3b3834] rounded-xl text-xs font-semibold text-gray-200 transition-colors shadow-sm"
             title="Click to select local UCI engine (e.g. GOOB 2.2-BETA, Stockfish, or custom binary)"
           >
-            <Cpu className="w-3.5 h-3.5 text-amber-400" />
-            <span className="text-gray-400 hidden sm:inline">Engine:</span>
-            <span className="font-bold text-amber-300">
-              {engineConfig.type === 'native'
-                ? engineConfig.nativeName || 'Local Native UCI'
-                : engineConfig.type === 'custom-file'
-                ? engineConfig.customFileName || 'Custom File'
-                : 'Stockfish 18 (NNUE)'}
+            <Cpu className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span className="text-gray-400 hidden md:inline">Engine:</span>
+            <span className="font-bold text-amber-300 max-w-[85px] sm:max-w-none truncate">
+              {shortEngineLabel}
             </span>
           </button>
 
           {/* New Game / Free Play Button */}
           <button
             onClick={handleNewGame}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2a2825] hover:bg-[#363430] border border-emerald-500/40 text-emerald-400 rounded-xl text-xs font-bold transition-all shadow-sm"
+            className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 bg-[#2a2825] hover:bg-[#363430] border border-emerald-500/40 text-emerald-400 rounded-xl text-xs font-bold transition-all shadow-sm"
             title="Start a fresh game to play your own moves with live analysis"
           >
-            <PlusCircle className="w-3.5 h-3.5" />
-            <span className="text-gray-200">New Game</span>
+            <PlusCircle className="w-3.5 h-3.5 shrink-0" />
+            <span className="text-gray-200 hidden sm:inline">New Game</span>
+            <span className="text-gray-200 sm:hidden">New</span>
           </button>
 
           {customExplorationFen && (
             <button
               onClick={() => setCustomExplorationFen(null)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition-all"
+              className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 rounded-xl text-xs font-bold transition-all"
+              title="Return to the evaluated game position"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              Back to Game
+              <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+              <span className="hidden sm:inline">Back to Game</span>
+              <span className="sm:hidden">Back</span>
             </button>
           )}
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2a2825] hover:bg-[#363430] border border-[#3b3834] rounded-xl text-xs font-semibold text-gray-200 transition-colors"
+            className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 bg-[#2a2825] hover:bg-[#363430] border border-[#3b3834] rounded-xl text-xs font-semibold text-gray-200 transition-colors"
+            title="Import or Load PGN"
           >
-            Import / Load PGN
+            <FileText className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <span className="hidden sm:inline">Import PGN</span>
+            <span className="sm:hidden">PGN</span>
           </button>
 
           <button
             onClick={handleRunReviewClick}
             disabled={isAnalyzing || (isFreePlay && boardMoves.length === 0)}
-            className="flex items-center gap-1.5 px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-950/40 transition-all hover:scale-105"
-            title={isFreePlay ? 'Run Game Review on the moves played on the board' : 'Run Game Review on active game'}
+            className="flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-950/40 transition-all hover:scale-105 shrink-0"
+            title={isFreePlay ? 'Run Game Review on board moves' : 'Run Game Review on active game'}
           >
-            <Sparkles className="w-4 h-4 fill-white" />
-            {isAnalyzing ? 'Analyzing...' : 'Run Game Review'}
+            <Sparkles className="w-3.5 h-3.5 fill-white shrink-0" />
+            <span className="hidden sm:inline">{isAnalyzing ? 'Analyzing...' : 'Run Game Review'}</span>
+            <span className="sm:hidden">{isAnalyzing ? 'Analyzing...' : 'Review'}</span>
           </button>
         </div>
       </header>
 
       {/* Main Workspace */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Board, Eval Bar, Controls, Momentum Chart */}
-        <div className="lg:col-span-7 flex flex-col gap-4">
-          <div className="flex items-stretch gap-3 justify-center">
+      <main className="flex-1 max-w-7xl w-full mx-auto p-2 sm:p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
+        {/* Left Column (Desktop) / Primary Column (Mobile) */}
+        <div className="lg:col-span-7 flex flex-col gap-3 sm:gap-4">
+          <div className="flex items-stretch gap-2 sm:gap-3 justify-center">
             {/* Vertical Evaluation Bar */}
-            <div className="w-8 shrink-0 flex flex-col self-stretch">
+            <div className="w-6 sm:w-8 shrink-0 flex flex-col self-stretch">
               <EvaluationBar
                 score={activeScore}
                 mate={activeMate}
@@ -822,9 +907,9 @@ export default function ChessAnalyzerApp() {
             />
           </div>
 
-          {/* Evaluation & Momentum Advantage Graph (Only when Game Review is active) */}
+          {/* Evaluation & Momentum Advantage Graph (Desktop view inside left column) */}
           {!isFreePlay && review && review.moves.length > 0 && (
-            <div className="max-w-[595px] w-full mx-auto">
+            <div className="hidden lg:block max-w-[595px] w-full mx-auto">
               <EvaluationChart
                 moves={review.moves}
                 currentPly={currentPly}
@@ -836,10 +921,160 @@ export default function ChessAnalyzerApp() {
               />
             </div>
           )}
+
+          {/* MOBILE ONLY (< lg): Move Coach Card + Tabbed Workspace */}
+          <div className="lg:hidden flex flex-col gap-3 mt-1">
+            {/* Analysis Progress Banner on Mobile */}
+            {isAnalyzing && (
+              <AnalysisProgressBar
+                progress={progress}
+                onCancel={() => {
+                  engineManager.stop();
+                  setIsAnalyzing(false);
+                  setProgress(null);
+                }}
+                engineName={
+                  engineConfig.type === 'native'
+                    ? engineConfig.nativeName || 'GOOB 2.2-BETA'
+                    : engineConfig.type === 'custom-file'
+                    ? engineConfig.customFileName || 'Custom File'
+                    : 'Stockfish 18 (NNUE)'
+                }
+                depth={engineConfig.depth || 20}
+              />
+            )}
+
+            {/* Move Coach Card: Right below controls on mobile so coach advice is immediately visible */}
+            <MoveCoachCard
+              move={currentMove}
+              engineName={
+                review?.engineName ||
+                (engineConfig.type === 'native'
+                  ? engineConfig.nativeName || 'GOOB 2.2-BETA'
+                  : engineConfig.type === 'custom-file'
+                  ? engineConfig.customFileName || 'Custom File'
+                  : 'Stockfish 18 (NNUE)')
+              }
+            />
+
+            {/* Mobile Tab Switcher */}
+            <div className="grid grid-cols-3 bg-[#1f1e1b] border border-[#363430] p-1 rounded-xl text-xs font-bold select-none">
+              <button
+                type="button"
+                onClick={() => setMobileTab('review')}
+                className={`flex items-center justify-center gap-1.5 py-2 rounded-lg transition-colors ${
+                  mobileTab === 'review'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <span>📊</span>
+                <span>{isFreePlay ? 'Status' : 'Review'}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileTab('moves')}
+                className={`flex items-center justify-center gap-1.5 py-2 rounded-lg transition-colors ${
+                  mobileTab === 'moves'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <span>📜</span>
+                <span>Moves ({displayMoves.length})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setMobileTab('chart')}
+                className={`flex items-center justify-center gap-1.5 py-2 rounded-lg transition-colors ${
+                  mobileTab === 'chart'
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                <span>📈</span>
+                <span>Chart</span>
+              </button>
+            </div>
+
+            {/* Mobile Tab 1: Review Summary / FreePlay Status */}
+            {mobileTab === 'review' && (
+              <div className="flex flex-col gap-3">
+                {isFreePlay && renderLiveBoardCard()}
+                {!isFreePlay && review && (
+                  <>
+                    <GameReviewHeader
+                      review={review}
+                      onSelectPhase={(phase) => {
+                        const targetMove = review.moves.find((m) => m.gamePhase === phase);
+                        if (targetMove) {
+                          setCurrentPly(targetMove.ply);
+                          playMoveSound(targetMove.ply);
+                        }
+                      }}
+                    />
+                    <MoveClassificationSummary
+                      review={review}
+                      selectedClassification={filterClassification}
+                      onSelectClassification={(classification) => setFilterClassification(classification)}
+                    />
+                  </>
+                )}
+                {!isFreePlay && !review && (
+                  <div className="text-center py-6 text-xs text-gray-500 bg-[#1f1e1b] rounded-xl border border-[#363430]">
+                    Run Game Review to view the performance summary.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Mobile Tab 2: Moves */}
+            {mobileTab === 'moves' && (
+              <div className="w-full">
+                {displayMoves.length > 0 ? (
+                  <MoveList
+                    moves={displayMoves}
+                    currentPly={currentPly}
+                    onSelectPly={(ply) => {
+                      setCustomExplorationFen(null);
+                      setCurrentPly(ply);
+                      playMoveSound(ply);
+                    }}
+                    filterClassification={filterClassification}
+                  />
+                ) : (
+                  <div className="text-center py-6 text-xs text-gray-500 bg-[#1f1e1b] rounded-xl border border-[#363430]">
+                    No moves to display.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Mobile Tab 3: Evaluation Chart */}
+            {mobileTab === 'chart' && (
+              <div className="w-full">
+                {!isFreePlay && review && review.moves.length > 0 ? (
+                  <EvaluationChart
+                    moves={review.moves}
+                    currentPly={currentPly}
+                    onSelectPly={(ply) => {
+                      setCustomExplorationFen(null);
+                      setCurrentPly(ply);
+                      playMoveSound(ply);
+                    }}
+                  />
+                ) : (
+                  <div className="text-center py-6 text-xs text-gray-500 bg-[#1f1e1b] rounded-xl border border-[#363430]">
+                    Run Game Review to see the momentum evaluation chart.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Right Column: Game Review Card, Coach commentary, Summary Table, Move List */}
-        <div className="lg:col-span-5 flex flex-col gap-4">
+        {/* Right Column (DESKTOP ONLY: >= lg) */}
+        <div className="hidden lg:flex lg:col-span-5 flex-col gap-4">
           {/* Analysis Progress Banner */}
           {isAnalyzing && (
             <AnalysisProgressBar
@@ -861,68 +1096,7 @@ export default function ChessAnalyzerApp() {
           )}
 
           {/* Live Board Mode Card when in isFreePlay */}
-          {isFreePlay && (
-            <div className="w-full bg-[#262421] border border-emerald-500/40 rounded-xl p-4 shadow-xl select-none">
-              <div className="flex items-center justify-between mb-3 border-b border-[#363430] pb-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="relative flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                  </span>
-                  <span className="text-xs font-black uppercase tracking-wider text-emerald-400">
-                    Live Board (Interactive)
-                  </span>
-                </div>
-                <div className="text-[11px] text-amber-300 font-bold px-2 py-0.5 bg-amber-950/40 border border-amber-800/40 rounded">
-                  {engineConfig.nativeName || 'GOOB 2.2-BETA'} (D{engineConfig.depth || 20})
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <div className="bg-[#1f1e1b] border border-[#363430] rounded-lg p-2.5">
-                  <div className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Live Evaluation</div>
-                  <div className="text-base font-black text-gray-100">
-                    {liveEval
-                      ? liveEval.mate !== null
-                        ? liveEval.mate > 0
-                          ? `M${liveEval.mate}`
-                          : `-M${Math.abs(liveEval.mate)}`
-                        : Math.abs(liveEval.score) < 5
-                        ? '0.0'
-                        : liveEval.score > 0
-                        ? `+${(liveEval.score / 100).toFixed(1)}`
-                        : `${(liveEval.score / 100).toFixed(1)}`
-                      : '0.0'}
-                  </div>
-                </div>
-
-                <div className="bg-[#1f1e1b] border border-[#363430] rounded-lg p-2.5">
-                  <div className="text-[10px] uppercase text-gray-400 font-semibold mb-0.5">Engine Best Move</div>
-                  <div className="text-base font-black text-emerald-400">
-                    {liveEval?.bestMove || (liveEngineEnabled ? 'Calculating...' : 'Enable Live Engine')}
-                  </div>
-                </div>
-              </div>
-
-              <div className="text-xs text-gray-300 mb-3 flex items-center justify-between">
-                <span>
-                  Moves played: <strong className="text-white">{boardMoves.length}</strong>
-                </span>
-                <span className="text-gray-400">
-                  Turn: <strong className="text-white">{currentFen.split(' ')[1] === 'w' ? 'White' : 'Black'}</strong>
-                </span>
-              </div>
-
-              <button
-                onClick={handleRunReviewClick}
-                disabled={boardMoves.length === 0 || isAnalyzing}
-                className="w-full flex items-center justify-center gap-2 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-950/40 transition-all hover:scale-[1.02]"
-              >
-                <Sparkles className="w-4 h-4 fill-white" />
-                <span>{isAnalyzing ? 'Analyzing...' : 'Run Game Review on These Moves'}</span>
-              </button>
-            </div>
-          )}
+          {isFreePlay && renderLiveBoardCard()}
 
           {/* Review Header Card */}
           {!isFreePlay && review && (

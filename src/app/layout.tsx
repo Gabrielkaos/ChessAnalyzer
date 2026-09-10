@@ -1,10 +1,18 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Chess Game Review & Accuracy Analyzer | Stockfish Powered',
+  title: 'Chess Game Review & Accuracy Analyzer | Stockfish & GOOB Powered',
   description:
     'Free chess game reviewer with move classifications (Brilliant, Great, Best, Blunder), win rate momentum, and accuracy scores just like Chess.com Game Review.',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: '#161512',
 };
 
 export default function RootLayout({

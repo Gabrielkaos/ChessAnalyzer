@@ -206,33 +206,33 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
   const currentConfig = engineManager.getConfig();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in select-none">
-      <div className="relative w-full max-w-3xl bg-[#262421] border border-[#3b3834] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in select-none">
+      <div className="relative w-full max-w-3xl bg-[#262421] border border-[#3b3834] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#363430] bg-[#1f1e1b]">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30">
-              <Cpu className="w-5 h-5" />
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-[#363430] bg-[#1f1e1b]">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="p-2 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 shrink-0">
+              <Cpu className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-100">Select Chess Engine</h2>
-              <p className="text-xs text-gray-400">
-                Choose between Stockfish 18 (NNUE), GOOB 2.2 (WASM / Native), or a custom engine
+              <h2 className="text-base sm:text-lg font-bold text-gray-100">Select Chess Engine</h2>
+              <p className="text-[11px] sm:text-xs text-gray-400 line-clamp-1">
+                Stockfish 18 (NNUE), GOOB 2.2 (WASM / Native), or custom engine
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#363430] transition-colors"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#363430] transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Current Active Engine Status */}
-        <div className="px-6 py-3 bg-[#1a1917] border-b border-[#363430] flex items-center justify-between text-xs">
+        <div className="px-4 sm:px-6 py-2 sm:py-3 bg-[#1a1917] border-b border-[#363430] flex flex-wrap items-center justify-between gap-2 text-xs">
           <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             <span className="text-gray-400">Current Active:</span>
             <span className="font-bold text-amber-300">
               {currentConfig.type === 'native'
@@ -250,7 +250,7 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
         </div>
 
         {/* Engine Selection Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-5">
+        <div className="p-3 sm:p-6 overflow-y-auto flex-1 space-y-4 sm:space-y-5">
           {/* Section: Built-in Engines */}
           <div>
             <div className="flex items-center justify-between mb-3">
@@ -593,21 +593,21 @@ export const EngineSelectModal: React.FC<EngineSelectModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-[#363430] bg-[#1f1e1b] flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-[#363430] bg-[#1f1e1b] flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white hover:bg-[#363430] transition-colors"
+            className="px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white hover:bg-[#363430] transition-colors"
           >
             Cancel
           </button>
           <button
             type="button"
             onClick={handleApply}
-            className="flex items-center gap-2 px-6 py-2 rounded-xl text-xs font-black bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-950/40 transition-all hover:scale-105"
+            className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs font-black bg-amber-600 hover:bg-amber-500 text-white shadow-lg shadow-amber-950/40 transition-all hover:scale-105"
           >
-            <CheckCircle2 className="w-4 h-4" />
-            Apply Selection
+            <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Apply Selection</span>
           </button>
         </div>
       </div>

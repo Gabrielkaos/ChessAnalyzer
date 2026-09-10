@@ -69,14 +69,14 @@ export const EvaluationBar: React.FC<EvaluationBarProps> = ({
 
   return (
     <div
-      className="relative w-8 h-full min-h-[320px] max-h-[560px] bg-[#262421] rounded-lg overflow-hidden border border-[#3b3834] flex flex-col shadow-inner select-none transition-all duration-300"
+      className="relative w-6 sm:w-8 h-full max-h-[560px] min-h-0 bg-[#262421] rounded-md sm:rounded-lg overflow-hidden border border-[#3b3834] flex flex-col shadow-inner select-none transition-all duration-300"
       title={`Evaluation: ${displayText} (${whitePercent.toFixed(1)}% White)`}
     >
       {/* Top section */}
       <div
         className={`w-full ${
           isTopBlack ? 'bg-[#1b1917]' : 'bg-[#ededed]'
-        } transition-all duration-300 ease-out relative flex items-start justify-center pt-1.5`}
+        } transition-all duration-300 ease-out relative flex items-start justify-center pt-1 sm:pt-1.5`}
         style={{
           height: `${topPercent}%`,
           flex: `${Math.max(topPercent, 1)} 1 0%`,
@@ -84,7 +84,7 @@ export const EvaluationBar: React.FC<EvaluationBarProps> = ({
       >
         {isTopWinning && (
           <span
-            className={`text-[10px] font-black tracking-tighter ${
+            className={`text-[8px] sm:text-[10px] font-black tracking-tighter ${
               isTopBlack ? 'text-gray-200' : 'text-gray-900'
             }`}
           >
@@ -97,7 +97,7 @@ export const EvaluationBar: React.FC<EvaluationBarProps> = ({
       <div
         className={`w-full ${
           isBottomWhite ? 'bg-[#ededed]' : 'bg-[#1b1917]'
-        } transition-all duration-300 ease-out relative flex items-end justify-center pb-1.5`}
+        } transition-all duration-300 ease-out relative flex items-end justify-center pb-1 sm:pb-1.5`}
         style={{
           height: `${bottomPercent}%`,
           flex: `${Math.max(bottomPercent, 1)} 1 0%`,
@@ -105,7 +105,7 @@ export const EvaluationBar: React.FC<EvaluationBarProps> = ({
       >
         {isBottomWinning && (
           <span
-            className={`text-[10px] font-black tracking-tighter ${
+            className={`text-[8px] sm:text-[10px] font-black tracking-tighter ${
               isBottomWhite ? 'text-gray-900' : 'text-gray-200'
             }`}
           >

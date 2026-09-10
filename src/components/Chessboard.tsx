@@ -168,7 +168,7 @@ export const Chessboard: React.FC<ChessboardProps> = ({
     : '#81b64c';
 
   return (
-    <div className="relative w-full aspect-square select-none max-w-[560px] mx-auto rounded-lg overflow-hidden shadow-2xl border-4 border-[#363430] bg-[#262421]">
+    <div className="relative w-full aspect-square select-none max-w-[560px] mx-auto rounded-lg overflow-hidden shadow-2xl border-2 sm:border-4 border-[#363430] bg-[#262421] touch-manipulation">
       {/* 8x8 Grid */}
       <div className="grid grid-cols-8 grid-rows-8 w-full h-full">
         {ranks.map((rank, rowIdx) =>
@@ -245,13 +245,13 @@ export const Chessboard: React.FC<ChessboardProps> = ({
 
                 {/* Classification badge badge on destination square */}
                 {isLastMoveTo && lastMove?.classification && (
-                  <div className="absolute -top-2 -right-2 z-30 shadow-lg pointer-events-none">
-                    <div className="w-6 h-6 rounded-full bg-surface border-2 border-surface flex items-center justify-center">
+                  <div className="absolute -top-1 -right-1 sm:-top-2 sm:-right-2 z-30 shadow-lg pointer-events-none">
+                    <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-surface border border-surface sm:border-2 flex items-center justify-center">
                       <Image
                         src={`/badges/${lastMove.classification}.png`}
                         alt={lastMove.classification}
-                        width={20}
-                        height={20}
+                        width={18}
+                        height={18}
                         className="object-contain"
                       />
                     </div>

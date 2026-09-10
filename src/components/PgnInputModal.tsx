@@ -97,66 +97,66 @@ export const PgnInputModal: React.FC<PgnInputModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in select-none">
-      <div className="relative w-full max-w-2xl bg-[#262421] border border-[#3b3834] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/75 backdrop-blur-sm animate-fade-in select-none">
+      <div className="relative w-full max-w-2xl bg-[#262421] border border-[#3b3834] rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-[#363430] bg-[#1f1e1b]">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-[#363430] bg-[#1f1e1b]">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-              <Sparkles className="w-5 h-5" />
+            <div className="p-2 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shrink-0">
+              <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-gray-100">Load & Review Game</h2>
-              <p className="text-xs text-gray-400">Import PGN, pick a famous masterpiece, or fetch your account</p>
+              <h2 className="text-base sm:text-lg font-bold text-gray-100">Load & Review Game</h2>
+              <p className="text-[11px] sm:text-xs text-gray-400 line-clamp-1">Import PGN, pick a famous masterpiece, or fetch your account</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#363430] transition-colors"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-[#363430] transition-colors shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-[#363430] bg-[#1a1917] px-6 pt-2">
+        <div className="flex border-b border-[#363430] bg-[#1a1917] px-2 sm:px-6 pt-1.5 sm:pt-2 gap-1 sm:gap-2">
           <button
             onClick={() => setActiveTab('paste')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-colors ${
               activeTab === 'paste'
                 ? 'border-emerald-500 text-emerald-400 bg-[#262421]'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
-            <FileText className="w-4 h-4" />
-            Paste PGN
+            <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Paste PGN</span>
           </button>
           <button
             onClick={() => setActiveTab('samples')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-colors ${
               activeTab === 'samples'
                 ? 'border-emerald-500 text-emerald-400 bg-[#262421]'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
-            <Sparkles className="w-4 h-4" />
-            Sample Games
+            <Sparkles className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Sample Games</span>
           </button>
           <button
             onClick={() => setActiveTab('online')}
-            className={`flex items-center gap-2 px-4 py-2.5 text-xs font-bold border-b-2 transition-colors ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 text-xs font-bold border-b-2 transition-colors ${
               activeTab === 'online'
                 ? 'border-emerald-500 text-emerald-400 bg-[#262421]'
                 : 'border-transparent text-gray-400 hover:text-gray-200'
             }`}
           >
-            <Globe className="w-4 h-4" />
-            Import Online
+            <Globe className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            <span>Import Online</span>
           </button>
         </div>
 
         {/* Tab Content */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+        <div className="p-3 sm:p-6 overflow-y-auto flex-1 space-y-3 sm:space-y-4">
           {activeTab === 'paste' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
@@ -177,9 +177,9 @@ export const PgnInputModal: React.FC<PgnInputModalProps> = ({
               <textarea
                 value={pgnText}
                 onChange={(e) => setPgnText(e.target.value)}
-                rows={9}
+                rows={6}
                 placeholder="Paste PGN here (e.g. 1. e4 e5 2. Nf3 Nc6 3. Bc4...)"
-                className="w-full p-3 bg-[#181715] border border-[#363430] rounded-xl text-xs text-gray-200 font-mono focus:outline-none focus:border-emerald-500 resize-none"
+                className="w-full p-2.5 sm:p-3 bg-[#181715] border border-[#363430] rounded-xl text-xs text-gray-200 font-mono focus:outline-none focus:border-emerald-500 resize-none sm:rows-9"
               />
             </div>
           )}
@@ -238,7 +238,7 @@ export const PgnInputModal: React.FC<PgnInputModalProps> = ({
                 <label className="block text-xs font-semibold text-gray-300 mb-1.5">
                   Enter {platform === 'chesscom' ? 'Chess.com' : 'Lichess'} Username:
                 </label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <input
                     type="text"
                     value={username}
@@ -301,11 +301,11 @@ export const PgnInputModal: React.FC<PgnInputModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4 border-t border-[#363430] bg-[#1f1e1b] flex items-center justify-between">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-[#363430] bg-[#1f1e1b] flex items-center justify-between gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white hover:bg-[#363430] transition-colors"
+            className="px-3 sm:px-4 py-2 rounded-xl text-xs font-semibold text-gray-400 hover:text-white hover:bg-[#363430] transition-colors"
           >
             Cancel
           </button>
@@ -316,10 +316,10 @@ export const PgnInputModal: React.FC<PgnInputModalProps> = ({
               onClose();
             }}
             disabled={!pgnText.trim() || isAnalyzing}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-lg shadow-emerald-950/40 transition-all hover:scale-105"
+            className="flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-2.5 rounded-xl text-xs font-black bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white shadow-lg shadow-emerald-950/40 transition-all hover:scale-105"
           >
-            <Play className="w-4 h-4 fill-white" />
-            Start Game Review
+            <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-white" />
+            <span>Start Game Review</span>
           </button>
         </div>
       </div>
