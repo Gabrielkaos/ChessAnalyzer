@@ -100,6 +100,39 @@ export function loadGameFromPgn(pgnString: string): {
   return { chess, headers, rawAnnotations, startFen };
 }
 
+interface CachedEval {
+  score: number;
+  mate: number | null;
+  bestMove: string;
+  pv?: string;
+}
+
+const evalCacheKey = (engineName: string, depth: number, fen: string) =>
+  `sf19eval:${engineName}:${depth}:${fen}`;
+
+function readEvalCache(key: string): CachedEval | null {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed?.score !== 'number') return null;
+    return { score: parsed.score, mate: parsed.mate, bestMove: parsed.bestMove || '', pv: parsed.pv || '' };
+  } catch {
+    return null;
+  }
+}
+
+function writeEvalCache(key: string, ev: CachedEval) {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    localStorage.setItem(
+      key,
+      JSON.stringify({ score: ev.score, mate: ev.mate, bestMove: ev.bestMove, pv: ev.pv })
+    );
+  } catch {}
+}
+
 /**
  * Analyzes full game and computes all Game Review metrics,
  * replicating exact accuracy_full_game logic from ChessAnalyzer/Analyzer.py
@@ -190,10 +223,23 @@ export async function analyzeGame(
     } else {
       // Evaluate with active engine using position startpos moves <m1> <m2> ...
       // preserves engine transposition table and move ordering heuristics across moves
-      const sfResult = await engineManager.evaluatePosition(pos, analysisDepth, {
-        moves: uciMoves.slice(0, i),
-        initialFen: history[0].before,
-      });
+      // Positions that are still inside the opening book don't need full-depth search,
+      // the engine result is only used for display (book moves are scored 100% anyway).
+      const effectiveDepth = i < longestBook ? Math.min(analysisDepth, 10) : analysisDepth;
+      const cacheKey = evalCacheKey(activeEngineName, effectiveDepth, pos);
+      const cached = readEvalCache(cacheKey);
+
+      let sfResult: CachedEval;
+      if (cached) {
+        sfResult = cached;
+      } else {
+        sfResult = await engineManager.evaluatePosition(pos, effectiveDepth, {
+          moves: uciMoves.slice(0, i),
+          initialFen: history[0].before,
+        });
+        writeEvalCache(cacheKey, sfResult);
+      }
+
       evaluated = sfResult.score;
       bestMove = sfResult.bestMove || '';
       mateIn = sfResult.mate;

@@ -4,6 +4,13 @@ let sf = null;
 const commandQueue = [];
 let isReady = false;
 
+// Multi-threaded search is only possible when SharedArrayBuffer is available
+// (the app is served with COOP/COEP headers, so crossOriginIsolated is true).
+const cores = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 1;
+const canUseThreads = typeof self !== 'undefined' && self.crossOriginIsolated === true;
+const THREADS = canUseThreads ? Math.min(Math.max(cores, 1), 4) : 1;
+const HASH_MB = 64;
+
 async function init() {
   try {
     const nnueRes = await fetch('/stockfish/nn-61e7af4bb97d.nnue');
@@ -30,10 +37,28 @@ async function init() {
 
     isReady = true;
 
-    // Process all queued commands (e.g. 'uci', 'isready')
-    while (commandQueue.length > 0) {
-      const cmd = commandQueue.shift();
-      sf.uci(cmd);
+    // Process queued commands, injecting UCI engine options after 'uci'
+    // but keeping 'isready' at the end so options are applied before readiness.
+    const flush = commandQueue.splice(0);
+    const deferredIsReady = [];
+    let sentUci = false;
+    for (const cmd of flush) {
+      const c = String(cmd).trim();
+      if (c === 'uci') {
+        sentUci = true;
+        sf.uci(c);
+        sf.uci(`setoption name Threads value ${THREADS}`);
+        sf.uci(`setoption name Hash value ${HASH_MB}`);
+      } else if (c === 'isready') {
+        deferredIsReady.push(c);
+      } else {
+        sf.uci(c);
+      }
+    }
+    if (sentUci && deferredIsReady.length) {
+      for (const c of deferredIsReady) sf.uci(c);
+    } else if (!sentUci) {
+      for (const c of flush) sf.uci(c);
     }
   } catch (err) {
     console.error('Stockfish 19 initialization error:', err);
